@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]
+pythonpath = ["src/lambdas/shared"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+

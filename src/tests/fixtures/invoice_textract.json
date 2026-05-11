@@ -1,0 +1,122 @@
+{
+  "DocumentMetadata": {
+    "Pages": 1
+  },
+  "Blocks": [
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "key-vendor",
+      "EntityTypes": ["KEY"],
+      "Confidence": 99.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-vendor", "w-name"]},
+        {"Type": "VALUE", "Ids": ["val-vendor"]}
+      ]
+    },
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "val-vendor",
+      "EntityTypes": ["VALUE"],
+      "Confidence": 98.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-acme", "w-services"]}
+      ]
+    },
+    {"BlockType": "WORD", "Id": "w-vendor", "Text": "Vendor", "Confidence": 99.0},
+    {"BlockType": "WORD", "Id": "w-name", "Text": "Name", "Confidence": 99.0},
+    {"BlockType": "WORD", "Id": "w-acme", "Text": "Acme", "Confidence": 98.5},
+    {"BlockType": "WORD", "Id": "w-services", "Text": "Services", "Confidence": 98.0},
+
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "key-date",
+      "EntityTypes": ["KEY"],
+      "Confidence": 97.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-invoice", "w-date"]},
+        {"Type": "VALUE", "Ids": ["val-date"]}
+      ]
+    },
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "val-date",
+      "EntityTypes": ["VALUE"],
+      "Confidence": 96.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-date-value"]}
+      ]
+    },
+    {"BlockType": "WORD", "Id": "w-invoice", "Text": "Invoice", "Confidence": 97.0},
+    {"BlockType": "WORD", "Id": "w-date", "Text": "Date", "Confidence": 97.0},
+    {"BlockType": "WORD", "Id": "w-date-value", "Text": "2026-05-01", "Confidence": 96.0},
+
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "key-total",
+      "EntityTypes": ["KEY"],
+      "Confidence": 96.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-total", "w-amount"]},
+        {"Type": "VALUE", "Ids": ["val-total"]}
+      ]
+    },
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "val-total",
+      "EntityTypes": ["VALUE"],
+      "Confidence": 95.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-total-value"]}
+      ]
+    },
+    {"BlockType": "WORD", "Id": "w-total", "Text": "Total", "Confidence": 96.0},
+    {"BlockType": "WORD", "Id": "w-amount", "Text": "Amount", "Confidence": 96.0},
+    {"BlockType": "WORD", "Id": "w-total-value", "Text": "$421.19", "Confidence": 95.0},
+
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "key-email",
+      "EntityTypes": ["KEY"],
+      "Confidence": 94.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-email"]},
+        {"Type": "VALUE", "Ids": ["val-email"]}
+      ]
+    },
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "val-email",
+      "EntityTypes": ["VALUE"],
+      "Confidence": 93.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-email-value"]}
+      ]
+    },
+    {"BlockType": "WORD", "Id": "w-email", "Text": "Email", "Confidence": 94.0},
+    {"BlockType": "WORD", "Id": "w-email-value", "Text": "billing@example.com", "Confidence": 93.0},
+
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "key-case",
+      "EntityTypes": ["KEY"],
+      "Confidence": 92.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-case", "w-number"]},
+        {"Type": "VALUE", "Ids": ["val-case"]}
+      ]
+    },
+    {
+      "BlockType": "KEY_VALUE_SET",
+      "Id": "val-case",
+      "EntityTypes": ["VALUE"],
+      "Confidence": 91.0,
+      "Relationships": [
+        {"Type": "CHILD", "Ids": ["w-case-value"]}
+      ]
+    },
+    {"BlockType": "WORD", "Id": "w-case", "Text": "Case", "Confidence": 92.0},
+    {"BlockType": "WORD", "Id": "w-number", "Text": "Number", "Confidence": 92.0},
+    {"BlockType": "WORD", "Id": "w-case-value", "Text": "CASE-1001", "Confidence": 91.0}
+  ]
+}
+
