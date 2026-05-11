@@ -1,57 +1,105 @@
 # DocuFlow OCR
 
-DocuFlow OCR is a portfolio-ready AWS serverless document intake system. It demonstrates presigned S3 uploads, API Gateway workflows, Step Functions orchestration, Textract OCR, Python Lambda parsing, DynamoDB status tracking, human review for low-confidence extraction, SQS dead-letter handling, CloudWatch alarms, and Terraform deployment.
+DocuFlow OCR is a product-facing document operations app with a Cloudflare Pages frontend and a serverless AWS backend. It accepts PDF/image uploads, runs asynchronous Textract OCR through Step Functions, normalizes extracted fields with Python Lambda, and routes low-confidence results into a human review workflow. It is built as a recruiter-readable cloud engineering portfolio project: infrastructure is defined in Terraform, workflow state is observable in AWS, parser logic is unit tested with mock Textract fixtures, and the frontend can run as a polished demo or connect to the deployed API.
+
+## About
+
+This project models a common manual operations problem: teams receive documents, copy fields by hand, and need a way to automate the repeatable work while still reviewing uncertain results. DocuFlow OCR demonstrates the core AWS pieces needed for that workflow: presigned intake, event-style processing, OCR orchestration, confidence scoring, durable job state, review APIs, audit records, and operational failure handling.
+
+Hosted demo: not currently deployed. The frontend is Cloudflare Pages-ready and the backend is designed to be deployed into an AWS account with Terraform.
+
+## Tech Stack
+
+| Area | Technology |
+| --- | --- |
+| Cloud | AWS |
+| Frontend | React, TypeScript, Vite, Cloudflare Pages |
+| Infrastructure | Terraform |
+| API | API Gateway HTTP API |
+| Compute | Python 3.12 AWS Lambda |
+| OCR | Amazon Textract `StartDocumentAnalysis` with `FORMS` and `TABLES` |
+| Orchestration | AWS Step Functions |
+| Storage | S3 for raw uploads and raw Textract JSON |
+| Data | DynamoDB jobs table and audit table |
+| Failure handling | SQS dead-letter queue |
+| Observability | CloudWatch log groups and alarms |
+| Testing | Pytest, Ruff, synthetic Textract fixtures |
+
+## Engineering Highlights
+
+- Implements a presigned upload flow that creates a DynamoDB job record and scopes raw S3 objects by owner and job ID.
+- Adds a Cloudflare Pages frontend that presents the project as a sellable OCR review product, with demo mode for hiring-manager walkthroughs and live API mode through `VITE_API_BASE_URL`.
+- Uses Step Functions to coordinate validation, asynchronous Textract start, wait/poll behavior, raw OCR persistence, parsing, confidence scoring, routing, retries, and failure handling.
+- Parses Textract key-value blocks into normalized fields such as `vendor_name`, `document_date`, `total_amount`, `email`, `parcel_id`, and `case_number`.
+- Routes low-confidence or incomplete extractions to `NEEDS_REVIEW` instead of pretending OCR is always reliable.
+- Provides review endpoints to list queued jobs, inspect extracted fields, submit corrected values, approve or reject a document, and write audit records.
+- Keeps infrastructure reproducible with Terraform and includes CloudWatch alarms for failed Step Functions executions and DLQ depth.
+- Tests parser, confidence scoring, and review status transitions locally without AWS calls.
 
 ## Architecture
 
+The main architecture docs are in:
+
+- [docs/architecture.md](docs/architecture.md) for the C4-style container diagram, runtime flow, deployment shape, and constraints.
+- [docs/adrs/README.md](docs/adrs/README.md) for concise architecture decision records.
+- [docs/manual-to-automation.md](docs/manual-to-automation.md) for the manual review and automation path.
+
+At a high level:
+
 ```mermaid
 flowchart LR
-    Client["Client or review operator"] --> API["API Gateway HTTP API"]
-    API --> Create["create_upload Lambda"]
-    Create --> Jobs["DynamoDB jobs table"]
-    Create --> Upload["S3 presigned PUT URL"]
-    Client --> Upload
-    Upload --> Raw["S3 raw/{owner}/{job_id}/{filename}"]
-    API --> Start["start_processing Lambda"]
-    Start --> SFN["Step Functions workflow"]
-    SFN --> Validate["validate_input Lambda"]
-    Validate --> TextractStart["textract_start Lambda"]
-    TextractStart --> Textract["Amazon Textract StartDocumentAnalysis"]
-    SFN --> Wait["Wait and poll"]
-    Wait --> TextractGet["textract_get_results Lambda"]
-    TextractGet --> RawJson["S3 textract/{job_id}/raw.json"]
-    SFN --> Parse["parse_and_score Lambda"]
-    Parse --> Jobs
-    Parse --> Complete{"Confidence route"}
-    Complete -->|high confidence| Done["COMPLETED"]
-    Complete -->|low confidence| Review["NEEDS_REVIEW"]
-    API --> ReviewAPI["review_api Lambda"]
-    ReviewAPI --> Jobs
-    ReviewAPI --> Audit["DynamoDB audit table"]
-    SFN --> Failure["failure_handler Lambda"]
-    Failure --> DLQ["SQS workflow DLQ"]
+    Client["Client or reviewer"] --> API["API Gateway HTTP API"]
+    API --> UploadLambda["create_upload Lambda"]
+    UploadLambda --> Jobs["DynamoDB jobs"]
+    UploadLambda --> S3["S3 raw documents"]
+    API --> StartLambda["start_processing Lambda"]
+    StartLambda --> SFN["Step Functions"]
+    SFN --> Textract["Amazon Textract"]
+    SFN --> Parser["parse_and_score Lambda"]
+    Parser --> Jobs
+    Parser --> Review["NEEDS_REVIEW or COMPLETED"]
+    API --> ReviewLambda["review_api Lambda"]
+    ReviewLambda --> Jobs
+    ReviewLambda --> Audit["DynamoDB audit"]
+    SFN --> DLQ["SQS DLQ"]
 ```
-
-## What This Proves
-
-- Document intake: API creates a job, returns a presigned upload URL, and stores raw files in S3.
-- Workflow automation: Step Functions validates input, starts Textract, polls results, parses fields, scores confidence, and routes outcomes.
-- Human-in-the-loop review: low-confidence jobs are listed through review endpoints, corrected, approved, rejected, and audited.
-- Operational readiness: retries, catches, DLQ capture, CloudWatch log groups, alarms, Terraform teardown, and fixture-backed unit tests.
 
 ## Repository Layout
 
 ```text
 .
 ├── infra/                 # Terraform for AWS resources
+├── frontend/              # Cloudflare Pages React product frontend
 ├── scripts/               # Lambda packaging helper
 ├── src/lambdas/           # Python Lambda handlers and shared package
 ├── src/tests/             # Unit tests and mock Textract fixtures
-├── docs/                  # Architecture, API, manual review, resume notes
-├── samples/               # Synthetic document guidance
+├── docs/                  # Architecture, ADRs, API examples, review flow, resume bullets
+├── samples/               # Synthetic sample-document guidance
 ├── Makefile
 └── AGENTS.md
 ```
+
+## API Summary
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/uploads` | Create a job and return a presigned S3 upload URL |
+| `POST` | `/jobs/{job_id}/start` | Start Step Functions processing after upload |
+| `GET` | `/jobs/{job_id}` | Fetch job status and metadata |
+| `GET` | `/jobs/{job_id}/result` | Fetch extracted fields and confidence data |
+| `GET` | `/review/jobs` | List jobs in `NEEDS_REVIEW` |
+| `GET` | `/review/jobs/{job_id}` | Fetch one review job |
+| `POST` | `/review/jobs/{job_id}/decision` | Approve or reject with optional corrections |
+
+More request and response examples are in [docs/api-examples.md](docs/api-examples.md).
+
+## Data Model
+
+The jobs table is keyed by `job_id` and uses a `status-created_at-index` GSI for the review queue. Status values are:
+
+`CREATED`, `UPLOADED`, `PROCESSING`, `COMPLETED`, `NEEDS_REVIEW`, `FAILED`, `APPROVED`, `REJECTED`.
+
+Raw documents and raw Textract JSON stay in S3. Normalized fields, confidence scores, review corrections, and status are stored in DynamoDB. Review decisions are also written to a dedicated audit table.
 
 ## Prerequisites
 
@@ -59,8 +107,6 @@ flowchart LR
 - Terraform 1.6+
 - AWS CLI credentials with permission to create S3, DynamoDB, Lambda, API Gateway, Step Functions, SQS, IAM, and CloudWatch resources
 - An AWS region where Textract supports document analysis, such as `us-east-1`
-
-No secrets are stored in this repository. Lambda code uses IAM roles from Terraform.
 
 ## Local Development
 
@@ -70,11 +116,26 @@ make test
 make lint
 make fmt
 make package
+make frontend-install
+make frontend-build
 make tf-fmt
 make tf-validate
 ```
 
 `make package` creates Lambda zip files in `build/lambda/`. Run it before `terraform apply`.
+
+Run the frontend locally:
+
+```bash
+make frontend-install
+make frontend-dev
+```
+
+The frontend works without an API URL in demo mode. To connect it to a deployed backend, set:
+
+```bash
+VITE_API_BASE_URL="https://your-api-id.execute-api.us-east-1.amazonaws.com"
+```
 
 ## Deploy
 
@@ -91,6 +152,25 @@ Capture the API base URL:
 ```bash
 API_BASE="$(terraform -chdir=infra output -raw api_base_url)"
 ```
+
+## Deploy Frontend To Cloudflare Pages
+
+The frontend build output is `frontend/dist`, and `frontend/wrangler.toml` sets the Pages project name to `docuflow-ocr`.
+
+Manual deploy:
+
+```bash
+cd frontend
+npm install
+npm run build
+npx wrangler pages deploy dist --project-name docuflow-ocr --branch main
+```
+
+GitHub Actions deploy is configured in `.github/workflows/deploy-frontend.yml`. It expects:
+
+- GitHub secret `CLOUDFLARE_API_TOKEN`
+- GitHub secret `CLOUDFLARE_ACCOUNT_ID`
+- Optional GitHub variable `VITE_API_BASE_URL`
 
 ## Demo Script
 
@@ -132,27 +212,13 @@ curl -s -X POST "$API_BASE/review/jobs/$JOB_ID/decision" \
   -d '{"decision":"APPROVE","reviewer":"aiden","corrected_fields":{"total_amount":"421.19"}}'
 ```
 
-More examples are in [docs/api-examples.md](docs/api-examples.md).
+## Privacy And Security
 
-## API Summary
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/uploads` | Create job and presigned S3 upload URL |
-| `POST` | `/jobs/{job_id}/start` | Start Step Functions processing |
-| `GET` | `/jobs/{job_id}` | Fetch job status and metadata |
-| `GET` | `/jobs/{job_id}/result` | Fetch extracted fields and confidence data |
-| `GET` | `/review/jobs` | List jobs in `NEEDS_REVIEW` |
-| `GET` | `/review/jobs/{job_id}` | Fetch one review job |
-| `POST` | `/review/jobs/{job_id}/decision` | Approve or reject with optional corrections |
-
-## Data Model
-
-The jobs table is keyed by `job_id` and uses a `status-created_at-index` GSI for the review queue. Status values are:
-
-`CREATED`, `UPLOADED`, `PROCESSING`, `COMPLETED`, `NEEDS_REVIEW`, `FAILED`, `APPROVED`, `REJECTED`.
-
-Raw documents and raw Textract JSON stay in S3. Normalized fields, confidence scores, review corrections, and status are stored in DynamoDB. Review decisions are also written to a dedicated audit table.
+- No secrets, credentials, real customer data, or private documents are committed.
+- The unit tests use synthetic Textract JSON fixtures instead of live AWS calls.
+- Terraform creates IAM roles for the deployed services; Lambda code does not require hard-coded AWS credentials.
+- The first version intentionally does not include authentication, so do not expose review endpoints publicly for production use without adding auth and owner-scoped authorization.
+- The frontend demo mode uses synthetic product data when no API URL is configured.
 
 ## Cost Notes
 
@@ -176,4 +242,4 @@ The S3 bucket uses `force_destroy = true` so Terraform can remove demo uploads d
 
 ## Scope Limits
 
-This first version intentionally does not include Cognito, multi-tenant authorization, a production review UI, custom ML, or long-term document retention policies. The hiring signal is the AWS automation flow: upload, OCR, orchestration, parse, score, route, review, observe, and tear down.
+This first version does not include Cognito, multi-tenant authorization, custom ML, payment processing, or long-term document retention policies. The intended hiring signal is the end-to-end product shape: Cloudflare Pages frontend, upload, OCR, orchestration, parse, score, route, review, observe, and tear down.

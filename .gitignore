@@ -1,4 +1,5 @@
 .venv/
+node_modules/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
@@ -7,6 +8,6 @@ __pycache__/
 *.tfstate.*
 build/
 dist/
+frontend/dist/
 *.zip
 .DS_Store
-
