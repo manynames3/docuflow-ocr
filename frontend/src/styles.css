@@ -155,9 +155,9 @@ a {
   grid-template-columns: minmax(0, 0.9fr) minmax(460px, 1.1fr);
   gap: 34px;
   width: min(1180px, calc(100% - 40px));
-  min-height: calc(100vh - 92px);
+  min-height: auto;
   margin: 0 auto;
-  padding: 54px 0 34px;
+  padding: 58px 0 34px;
   align-items: center;
 }
 

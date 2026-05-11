@@ -2,8 +2,8 @@ import type { ReviewJob, TimelineEvent } from "./types";
 
 export const sampleJob: ReviewJob = {
   job_id: "demo-9f4b2c18",
-  filename: "vendor-invoice-0421.pdf",
-  owner_id: "acme-ops",
+  filename: "acme-invoice-0421.pdf",
+  owner_id: "ap-operations",
   status: "NEEDS_REVIEW",
   created_at: "2026-05-11T20:14:00Z",
   updated_at: "2026-05-11T20:15:26Z",
@@ -18,20 +18,20 @@ export const sampleJob: ReviewJob = {
       confidence: 96,
       source_key: "Invoice Date",
     },
+    invoice_number: {
+      value: "INV-0421",
+      confidence: 94.5,
+      source_key: "Invoice Number",
+    },
     total_amount: {
       value: "$421.19",
       confidence: 78.5,
-      source_key: "Total Amount",
+      source_key: "Amount Due",
     },
     email: {
       value: "billing@example.com",
       confidence: 93,
       source_key: "Email",
-    },
-    case_number: {
-      value: "CASE-1001",
-      confidence: 91,
-      source_key: "Case Number",
     },
   },
   confidence: {
@@ -46,9 +46,9 @@ export const completedJobs: ReviewJob[] = [
   {
     ...sampleJob,
     job_id: "demo-4f6d2a90",
-    filename: "parcel-notice-1842.pdf",
+    filename: "vendor-batch-1842.pdf",
     status: "COMPLETED",
-    owner_id: "county-review",
+    owner_id: "ap-team",
     confidence: {
       score: 96.1,
       average_confidence: 97.2,
@@ -59,9 +59,9 @@ export const completedJobs: ReviewJob[] = [
   {
     ...sampleJob,
     job_id: "demo-a120f3bd",
-    filename: "claim-form-77.png",
+    filename: "supplier-credit-77.png",
     status: "APPROVED",
-    owner_id: "claims-team",
+    owner_id: "controller-review",
     confidence: {
       score: 84.8,
       average_confidence: 90.4,
@@ -74,22 +74,22 @@ export const completedJobs: ReviewJob[] = [
 export const baseTimeline: TimelineEvent[] = [
   {
     label: "Intake",
-    detail: "Job record and upload URL created",
+    detail: "Invoice job and upload URL created",
     status: "done",
   },
   {
     label: "Upload",
-    detail: "Document stored in S3",
+    detail: "Invoice received",
     status: "done",
   },
   {
-    label: "OCR",
-    detail: "Textract analysis completed",
+    label: "Extract",
+    detail: "Invoice details captured",
     status: "done",
   },
   {
     label: "Review",
-    detail: "Low-confidence field awaiting approval",
+    detail: "Invoice total awaiting approval",
     status: "active",
   },
 ];
@@ -98,21 +98,30 @@ export const pricingPlans = [
   {
     name: "Starter",
     price: "$49",
-    summary: "For small teams replacing spreadsheet-based document intake.",
-    features: ["500 pages/month", "Review queue", "CSV exports", "Email support"],
+    summary: "For small Accounts Payable teams moving invoice intake out of email and spreadsheets.",
+    features: [
+      "500 invoice pages/month",
+      "Accounts Payable review queue",
+      "CSV exports",
+      "Email support",
+    ],
   },
   {
     name: "Operations",
     price: "$149",
-    summary: "For departments with daily document processing work.",
-    features: ["3,000 pages/month", "Audit history", "Priority OCR", "Workflow support"],
+    summary: "For finance teams reviewing vendor invoices every day.",
+    features: [
+      "3,000 invoice pages/month",
+      "Approval audit trail",
+      "Faster processing",
+      "Accounting-ready exports",
+    ],
     featured: true,
   },
   {
     name: "Enterprise",
     price: "Custom",
-    summary: "For regulated teams with custom retention and approval flows.",
-    features: ["Custom volume", "Private AWS deployment", "SLA options", "Security review"],
+    summary: "For shared services teams with custom controls and retention needs.",
+    features: ["Custom invoice volume", "Dedicated rollout", "Priority support", "Security review"],
   },
 ];
-

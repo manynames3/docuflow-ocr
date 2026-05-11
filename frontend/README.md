@@ -1,6 +1,6 @@
 # DocuFlow OCR Frontend
 
-Cloudflare Pages frontend for DocuFlow OCR. It is a React/Vite product surface for document intake, OCR status, field review, recent jobs, and customer-facing plans.
+Cloudflare Pages frontend for DocuFlow OCR. It is a React/Vite product surface for accounts payable invoice intake, OCR status, Accounts Payable field review, recent invoices, and customer-facing plans.
 
 ## Modes
 
@@ -39,4 +39,3 @@ Optional environment variable:
 ```text
 VITE_API_BASE_URL=https://your-api-id.execute-api.us-east-1.amazonaws.com
 ```
-

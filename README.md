@@ -1,10 +1,10 @@
 # DocuFlow OCR
 
-DocuFlow OCR is a product-facing document operations app with a Cloudflare Pages frontend and a serverless AWS backend. It accepts PDF/image uploads, runs asynchronous Textract OCR through Step Functions, normalizes extracted fields with Python Lambda, and routes low-confidence results into a human review workflow. It is built as a recruiter-readable cloud engineering portfolio project: infrastructure is defined in Terraform, workflow state is observable in AWS, parser logic is unit tested with mock Textract fixtures, and the frontend can run as a polished demo or connect to the deployed API.
+DocuFlow OCR is a product-facing accounts payable invoice-processing app with a Cloudflare Pages frontend and a serverless AWS backend. It accepts invoice PDFs/images, runs asynchronous Textract OCR through Step Functions, normalizes extracted fields with Python Lambda, and routes low-confidence invoice totals or vendor fields into a finance review workflow. It is built as a recruiter-readable cloud engineering portfolio project: infrastructure is defined in Terraform, workflow state is observable in AWS, parser logic is unit tested with mock Textract fixtures, and the frontend can run as a polished demo or connect to the deployed API.
 
 ## About
 
-This project models a common manual operations problem: teams receive documents, copy fields by hand, and need a way to automate the repeatable work while still reviewing uncertain results. DocuFlow OCR demonstrates the core AWS pieces needed for that workflow: presigned intake, event-style processing, OCR orchestration, confidence scoring, durable job state, review APIs, audit records, and operational failure handling.
+This project models a common accounts payable problem: finance teams receive vendor invoices as PDFs or images, copy fields by hand, and need a way to automate repeatable extraction while still reviewing uncertain results. DocuFlow OCR demonstrates the core AWS pieces needed for that workflow: presigned intake, event-style processing, OCR orchestration, confidence scoring, durable job state, review APIs, audit records, and operational failure handling.
 
 Hosted demo: not currently deployed. The frontend is Cloudflare Pages-ready and the backend is designed to be deployed into an AWS account with Terraform.
 
@@ -30,7 +30,7 @@ Hosted demo: not currently deployed. The frontend is Cloudflare Pages-ready and 
 - Implements a presigned upload flow that creates a DynamoDB job record and scopes raw S3 objects by owner and job ID.
 - Adds a Cloudflare Pages frontend that presents the project as a sellable OCR review product, with demo mode for hiring-manager walkthroughs and live API mode through `VITE_API_BASE_URL`.
 - Uses Step Functions to coordinate validation, asynchronous Textract start, wait/poll behavior, raw OCR persistence, parsing, confidence scoring, routing, retries, and failure handling.
-- Parses Textract key-value blocks into normalized fields such as `vendor_name`, `document_date`, `total_amount`, `email`, `parcel_id`, and `case_number`.
+- Parses Textract key-value blocks into normalized invoice fields such as `vendor_name`, `invoice_number`, `document_date`, `total_amount`, and remittance contact details, while still supporting generic fields for other document types.
 - Routes low-confidence or incomplete extractions to `NEEDS_REVIEW` instead of pretending OCR is always reliable.
 - Provides review endpoints to list queued jobs, inspect extracted fields, submit corrected values, approve or reject a document, and write audit records.
 - Keeps infrastructure reproducible with Terraform and includes CloudWatch alarms for failed Step Functions executions and DLQ depth.
@@ -42,6 +42,7 @@ The main architecture docs are in:
 
 - [docs/architecture.md](docs/architecture.md) for the C4-style container diagram, runtime flow, deployment shape, and constraints.
 - [docs/adrs/README.md](docs/adrs/README.md) for concise architecture decision records.
+- [docs/use-cases.md](docs/use-cases.md) for Accounts Payable invoice positioning and other enterprise OCR use cases.
 - [docs/manual-to-automation.md](docs/manual-to-automation.md) for the manual review and automation path.
 
 At a high level:

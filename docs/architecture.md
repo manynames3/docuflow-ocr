@@ -1,22 +1,22 @@
 # Architecture
 
-DocuFlow OCR is a product-facing document-processing system with a Cloudflare Pages frontend and a serverless AWS backend deployed with Terraform. The system accepts documents through a presigned S3 upload flow, stores job state in DynamoDB, uses Step Functions to orchestrate asynchronous Textract OCR, parses normalized fields in Python Lambda, and routes uncertain results to a human review API.
+DocuFlow OCR is a product-facing accounts payable invoice-processing system with a Cloudflare Pages frontend and a serverless AWS backend deployed with Terraform. The system accepts invoice PDFs/images through a presigned S3 upload flow, stores job state in DynamoDB, uses Step Functions to orchestrate asynchronous Textract OCR, parses normalized invoice fields in Python Lambda, and routes uncertain totals or vendor fields to a finance review API.
 
 ## Container Diagram
 
 ```mermaid
 flowchart TB
-    User["Document submitter or reviewer"]
+    User["Accounts Payable analyst or finance reviewer"]
 
     subgraph Cloudflare["Cloudflare"]
         Frontend["Cloudflare Pages frontend\nReact, TypeScript, Vite"]
     end
 
     subgraph AWS["AWS account"]
-        API["API Gateway HTTP API\nRoutes upload, processing, status, and review requests"]
+        API["API Gateway HTTP API\nRoutes invoice upload, processing, status, and review requests"]
 
         subgraph Lambdas["Python 3.12 Lambda functions"]
-            CreateUpload["create_upload\nCreates job and presigned S3 URL"]
+            CreateUpload["create_upload\nCreates invoice job and presigned S3 URL"]
             StartProcessing["start_processing\nStarts workflow execution"]
             ValidateInput["validate_input\nChecks uploaded S3 object"]
             StartTextract["textract_start\nStarts async Textract analysis"]
@@ -28,9 +28,9 @@ flowchart TB
 
         SFN["Step Functions state machine\nValidation, OCR polling, parse, route, failure handling"]
         Textract["Amazon Textract\nStartDocumentAnalysis with FORMS and TABLES"]
-        S3["S3 documents bucket\nraw uploads and textract JSON"]
-        Jobs["DynamoDB jobs table\njob state, fields, confidence, review status"]
-        Audit["DynamoDB audit table\nreview decisions"]
+        S3["S3 documents bucket\nraw invoices and textract JSON"]
+        Jobs["DynamoDB jobs table\ninvoice state, fields, confidence, review status"]
+        Audit["DynamoDB audit table\ninvoice approval decisions"]
         DLQ["SQS workflow DLQ\nfailed workflow payloads"]
         Logs["CloudWatch\nLambda/API/SFN logs and alarms"]
     end
@@ -67,16 +67,16 @@ flowchart TB
 ## Runtime Flow
 
 1. A user opens the Cloudflare Pages frontend.
-2. The frontend calls `POST /uploads` with a filename, content type, and optional owner ID.
-3. `create_upload` creates a DynamoDB job item in `CREATED` status and returns a presigned S3 `PUT` URL.
-4. The frontend uploads the PDF or image directly to S3 under `raw/{owner_id}/{job_id}/{filename}`.
+2. The frontend calls `POST /uploads` with an invoice filename, content type, and optional owner ID.
+3. `create_upload` creates a DynamoDB invoice job item in `CREATED` status and returns a presigned S3 `PUT` URL.
+4. The frontend uploads the invoice PDF or image directly to S3 under `raw/{owner_id}/{job_id}/{filename}`.
 5. The frontend calls `POST /jobs/{job_id}/start` when the upload is complete.
 6. `start_processing` marks the job `PROCESSING` and starts a Step Functions execution.
 7. The workflow validates the S3 object, starts Textract document analysis, waits, and polls for completion.
 8. `textract_get_results` stores raw Textract JSON in S3 under `textract/{job_id}/raw.json`.
-9. `parse_and_score` extracts normalized key-value fields, calculates confidence, and updates DynamoDB.
-10. High-confidence jobs become `COMPLETED`; low-confidence or incomplete jobs become `NEEDS_REVIEW`.
-11. Review endpoints list queued jobs, return extracted fields, accept corrections, and write approve/reject audit records.
+9. `parse_and_score` extracts normalized invoice fields, calculates confidence, and updates DynamoDB.
+10. High-confidence invoice jobs become `COMPLETED`; low-confidence or incomplete jobs become `NEEDS_REVIEW`.
+11. Review endpoints list queued invoice jobs, return extracted fields, accept corrections, and write approve/reject audit records.
 12. Workflow failures are marked `FAILED` and sent to the SQS DLQ.
 
 ## Deployment Shape

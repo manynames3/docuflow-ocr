@@ -84,7 +84,7 @@ export default function App() {
   const [timeline, setTimeline] = useState<TimelineEvent[]>(baseTimeline);
   const [processing, setProcessing] = useState(false);
   const [mode, setMode] = useState<IntakeMode>(hasApiBackend() ? "api" : "demo");
-  const [notice, setNotice] = useState("Review queue ready");
+  const [notice, setNotice] = useState("Accounts Payable review queue ready");
   const [correctedFields, setCorrectedFields] = useState<Record<string, string>>(
     Object.fromEntries(
       Object.entries(sampleJob.parsed_fields).map(([field, details]) => [field, details.value]),
@@ -98,15 +98,16 @@ export default function App() {
 
   function updateTimeline(activeIndex: number) {
     const details = [
-      "Job record and upload URL created",
-      "Document stored in S3",
-      "Textract workflow in progress",
-      "Review queue updated",
+      "Invoice record created",
+      "Invoice received",
+      "Invoice details being captured",
+      "Accounts Payable review queue updated",
     ];
+    const labels = ["Intake", "Upload", "Extract", "Review"];
 
     setTimeline(
       pipelineSteps.map((step, index) => ({
-        label: step === "NEEDS_REVIEW" ? "REVIEW" : step,
+        label: labels[index] || step,
         detail: details[index],
         status: index < activeIndex ? "done" : index === activeIndex ? "active" : "queued",
       })),
@@ -133,10 +134,10 @@ export default function App() {
     );
 
     const transitions: Array<{ status: JobStatus; notice: string }> = [
-      { status: "CREATED", notice: "Upload URL issued" },
-      { status: "UPLOADED", notice: "Document received" },
-      { status: "PROCESSING", notice: "Textract workflow running" },
-      { status: "NEEDS_REVIEW", notice: "Review queue updated" },
+      { status: "CREATED", notice: "Invoice upload URL issued" },
+      { status: "UPLOADED", notice: "Invoice received" },
+      { status: "PROCESSING", notice: "Capturing invoice details" },
+      { status: "NEEDS_REVIEW", notice: "Accounts Payable review queue updated" },
     ];
 
     transitions.forEach((transition, index) => {
@@ -170,12 +171,12 @@ export default function App() {
       setNotice("Uploading document");
       updateTimeline(1);
       await uploadToS3(file, upload);
-      setNotice("Starting workflow");
+      setNotice("Preparing invoice review");
       updateTimeline(2);
       await startProcessing(upload.job_id);
       let job = normalizeJob(await getJob(upload.job_id), file.name);
       for (let attempt = 0; attempt < 8 && job.status === "PROCESSING"; attempt += 1) {
-        setNotice("Waiting for OCR results");
+        setNotice("Waiting for invoice details");
         await wait(4000);
         job = normalizeJob(await getJob(upload.job_id), file.name);
       }
@@ -186,7 +187,7 @@ export default function App() {
           Object.entries(job.parsed_fields || {}).map(([field, details]) => [field, details.value]),
         ),
       );
-      setNotice("Job submitted");
+      setNotice("Invoice submitted");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "API request failed");
     } finally {
@@ -229,7 +230,7 @@ export default function App() {
     };
     setActiveJob(approvedJob);
     mergeJob(approvedJob);
-    setNotice("Document approved");
+    setNotice("Invoice approved");
     setTimeline((current) =>
       current.map((item) => ({
         ...item,
@@ -248,15 +249,15 @@ export default function App() {
           <span>DocuFlow OCR</span>
         </a>
         <nav className="nav-links" aria-label="Primary">
-          <a href="#workspace">Workspace</a>
+          <a href="#workspace">Invoices</a>
           <a href="#review">Review</a>
           <a href="#pricing">Pricing</a>
-          <a href="#deployment">Deploy</a>
+          <a href="#platform">Why DocuFlow</a>
         </nav>
         <div className="topbar-actions">
           <span className="mode-pill">
             <Cloud size={14} />
-            {hasApiBackend() ? "Live API" : "Demo mode"}
+            Invoice workspace
           </span>
           <button className="icon-button" type="button" aria-label="Refresh workspace">
             <RefreshCw size={17} />
@@ -266,16 +267,16 @@ export default function App() {
 
       <section className="hero-band" id="workspace">
         <div className="hero-copy">
-          <span className="eyebrow">Document operations platform</span>
-          <h1>OCR intake, review, and audit for teams that still process documents by hand.</h1>
+          <span className="eyebrow">Accounts payable automation</span>
+          <h1>Invoice intake and approvals for Accounts Payable teams.</h1>
           <p>
-            Turn PDFs and images into structured records with AWS Textract, Step Functions, and a
-            review queue built for production operators.
+            Upload vendor invoices, capture the important fields, and send only uncertain totals or
+            vendor details to review.
           </p>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={handleStart} disabled={processing}>
               {processing ? <RefreshCw className="spin" size={18} /> : <Play size={18} />}
-              Run intake
+              Process sample invoice
             </button>
             <button
               className="secondary-button"
@@ -283,16 +284,16 @@ export default function App() {
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload size={18} />
-              Select document
+              Upload invoice
             </button>
           </div>
         </div>
 
-        <section className="command-surface" aria-label="Document intake command center">
+        <section className="command-surface" aria-label="Invoice intake command center">
           <div className="surface-header">
             <div>
-              <span className="surface-kicker">Live workspace</span>
-              <h2>Intake Command Center</h2>
+              <span className="surface-kicker">Invoice workspace</span>
+              <h2>Accounts Payable Intake</h2>
             </div>
             <span className={`status-badge status-${activeJob.status.toLowerCase()}`}>
               {statusLabel(activeJob.status)}
@@ -320,8 +321,8 @@ export default function App() {
           </div>
 
           <div className="metric-grid" aria-label="Operational metrics">
-            <Metric icon={<Gauge size={18} />} label="Auto-score" value={`${activeJob.confidence.score}%`} />
-            <Metric icon={<ClipboardCheck size={18} />} label="Review queue" value={`${reviewCount}`} />
+            <Metric icon={<Gauge size={18} />} label="Confidence score" value={`${activeJob.confidence.score}%`} />
+            <Metric icon={<ClipboardCheck size={18} />} label="Needs review" value={`${reviewCount}`} />
             <Metric icon={<BadgeCheck size={18} />} label="Approved" value={`${approvedCount}`} />
           </div>
 
@@ -341,8 +342,8 @@ export default function App() {
         <section className="panel" id="review">
           <div className="panel-heading">
             <div>
-              <span className="eyebrow">Human review</span>
-              <h2>Field verification</h2>
+              <span className="eyebrow">Accounts Payable review</span>
+              <h2>Invoice field verification</h2>
             </div>
             <button className="secondary-button small" type="button" onClick={approveJob}>
               <CheckCircle2 size={17} />
@@ -375,8 +376,8 @@ export default function App() {
             ) : (
               <div className="empty-state">
                 <SearchCheck size={22} />
-                <strong>OCR results pending</strong>
-                <span>The review fields will appear when Textract parsing finishes.</span>
+                <strong>Invoice details pending</strong>
+                <span>The review fields will appear when extraction finishes.</span>
               </div>
             )}
           </div>
@@ -385,8 +386,8 @@ export default function App() {
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <span className="eyebrow">Pipeline health</span>
-              <h2>Recent jobs</h2>
+              <span className="eyebrow">Invoice queue</span>
+              <h2>Recent invoices</h2>
             </div>
             <button className="icon-button dark" type="button" aria-label="Download report">
               <Download size={17} />
@@ -413,16 +414,20 @@ export default function App() {
       </section>
 
       <section className="trust-strip" aria-label="Platform capabilities">
-        <Capability icon={<Layers3 size={20} />} title="Serverless workflow" text="API Gateway, Lambda, Step Functions" />
-        <Capability icon={<SearchCheck size={20} />} title="OCR extraction" text="Textract forms and tables" />
-        <Capability icon={<ShieldCheck size={20} />} title="Audit path" text="Review decisions in DynamoDB" />
-        <Capability icon={<Activity size={20} />} title="Ops visibility" text="CloudWatch alarms and SQS DLQ" />
+        <Capability
+          icon={<Layers3 size={20} />}
+          title="Less manual entry"
+          text="Capture invoice fields before review"
+        />
+        <Capability icon={<SearchCheck size={20} />} title="Review the exceptions" text="Focus on uncertain totals and vendors" />
+        <Capability icon={<ShieldCheck size={20} />} title="Approval history" text="Keep a record of every decision" />
+        <Capability icon={<Activity size={20} />} title="Ready for accounting" text="Prepare clean invoice records" />
       </section>
 
       <section className="pricing-section" id="pricing">
         <div className="section-heading">
-          <span className="eyebrow">Commercial packaging</span>
-          <h2>Plans that make the product feel ready for customers.</h2>
+          <span className="eyebrow">Accounts Payable team plans</span>
+          <h2>Invoice automation that fits your finance team.</h2>
         </div>
         <div className="pricing-grid">
           {pricingPlans.map((plan) => (
@@ -449,27 +454,27 @@ export default function App() {
         </div>
       </section>
 
-      <section className="deployment-band" id="deployment">
+      <section className="deployment-band" id="platform">
         <div>
-          <span className="eyebrow">Cloudflare Pages frontend</span>
-          <h2>Static app, AWS backend, sales-ready surface.</h2>
+          <span className="eyebrow">Built for finance teams</span>
+          <h2>One workspace for invoice intake, review, and approval.</h2>
           <p>
-            The frontend deploys from `frontend/dist` and can run as a polished demo or connect to
-            the deployed API with `VITE_API_BASE_URL`.
+            Give Accounts Payable analysts a single place to upload vendor invoices, verify
+            extracted fields, and approve clean records before they move downstream.
           </p>
         </div>
         <div className="deployment-stack">
           <span>
             <Lock size={16} />
-            No credentials in browser code
+            Direct invoice uploads
           </span>
           <span>
             <Sparkles size={16} />
-            Demo mode for hiring reviews
+            Review uncertain totals first
           </span>
           <span>
             <Clock3 size={16} />
-            Direct Cloudflare Pages deploy
+            Approval history for finance teams
           </span>
         </div>
       </section>
