@@ -6,7 +6,7 @@ DocuFlow OCR is a product-facing accounts payable invoice-processing app with a 
 
 This project models a common accounts payable problem: finance teams receive vendor invoices as PDFs or images, copy fields by hand, and need a way to automate repeatable extraction while still reviewing uncertain results. DocuFlow OCR demonstrates the core AWS pieces needed for that workflow: presigned intake, event-style processing, OCR orchestration, confidence scoring, durable job state, review APIs, audit records, and operational failure handling.
 
-Hosted demo: not currently deployed. The frontend is Cloudflare Pages-ready and the backend is designed to be deployed into an AWS account with Terraform.
+Hosted demo: [https://docuflow-ocr.pages.dev](https://docuflow-ocr.pages.dev). The frontend runs as a polished invoice-processing product demo; the backend is designed to be deployed into an AWS account with Terraform.
 
 ## Tech Stack
 

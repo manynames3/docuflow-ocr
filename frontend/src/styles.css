@@ -68,7 +68,10 @@ a {
 .brand,
 .topbar-actions,
 .mode-pill,
+.demo-link,
+.topbar-cta,
 .hero-actions,
+.buyer-note,
 .surface-header,
 .dropzone,
 .metric,
@@ -82,8 +85,9 @@ a {
 }
 
 .brand {
-  gap: 10px;
-  font-weight: 800;
+  gap: 12px;
+  min-width: 220px;
+  font-weight: 900;
   letter-spacing: 0;
 }
 
@@ -91,28 +95,131 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(239, 184, 92, 0.35);
-  border-radius: 8px;
-  color: #f3c66e;
-  background: rgba(239, 184, 92, 0.12);
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(243, 198, 110, 0.42);
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(243, 198, 110, 0.18), rgba(20, 24, 30, 0.88) 48%),
+    rgba(13, 15, 19, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 14px 30px rgba(0, 0, 0, 0.32);
+}
+
+.brand-mark svg {
+  width: 37px;
+  height: 37px;
+  overflow: visible;
+}
+
+.brand-mark-paper {
+  fill: rgba(255, 248, 236, 0.94);
+}
+
+.brand-mark-fold,
+.brand-mark-line,
+.brand-mark-check,
+.brand-mark-flow {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.brand-mark-fold {
+  stroke: rgba(12, 13, 16, 0.42);
+  stroke-width: 2.2;
+}
+
+.brand-mark-line {
+  stroke: rgba(12, 13, 16, 0.54);
+  stroke-width: 2.1;
+}
+
+.brand-mark-line.primary {
+  stroke: #b87912;
+}
+
+.brand-mark-check {
+  stroke: #0f766e;
+  stroke-width: 2.8;
+}
+
+.brand-mark-flow {
+  stroke: #f3c66e;
+  stroke-width: 2.6;
+}
+
+.brand-copy {
+  display: grid;
+  gap: 1px;
+}
+
+.brand-copy strong,
+.brand-copy small {
+  display: block;
+  line-height: 1;
+}
+
+.brand-copy strong {
+  color: #fff8ec;
+  font-size: 19px;
+}
+
+.brand-copy small {
+  color: rgba(245, 241, 232, 0.54);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 24px;
-  color: rgba(245, 241, 232, 0.68);
+  gap: 6px;
+  color: rgba(245, 241, 232, 0.62);
   font-size: 14px;
+}
+
+.nav-links a {
+  border-radius: 8px;
+  padding: 9px 11px;
 }
 
 .nav-links a:hover {
   color: #f5f1e8;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .topbar-actions {
   gap: 10px;
+}
+
+.demo-link {
+  min-height: 38px;
+  padding: 0 10px;
+  color: rgba(245, 241, 232, 0.68);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.demo-link:hover {
+  color: #fff8ec;
+}
+
+.topbar-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 1px solid rgba(243, 198, 110, 0.28);
+  border-radius: 8px;
+  padding: 0 13px;
+  color: #17120a;
+  font-size: 14px;
+  font-weight: 900;
+  background: linear-gradient(180deg, #f7d17b, #d9a742);
 }
 
 .mode-pill,
@@ -129,9 +236,9 @@ a {
 }
 
 .mode-pill {
-  border: 1px solid rgba(34, 197, 167, 0.24);
-  color: #7de2d1;
-  background: rgba(34, 197, 167, 0.1);
+  border: 1px solid rgba(243, 198, 110, 0.24);
+  color: #f3c66e;
+  background: rgba(243, 198, 110, 0.09);
 }
 
 .icon-button {
@@ -204,6 +311,23 @@ a {
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 28px;
+}
+
+.buyer-note {
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 22px;
+}
+
+.buyer-note span {
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: rgba(245, 241, 232, 0.68);
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.045);
 }
 
 .primary-button,
@@ -443,6 +567,109 @@ a {
   padding: 24px 0;
 }
 
+.buyer-strip,
+.workflow-section,
+.faq-section {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+}
+
+.buyer-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 10px 0 34px;
+}
+
+.outcome-card,
+.workflow-card,
+.faq-item {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.outcome-card {
+  display: grid;
+  gap: 8px;
+  min-height: 172px;
+  padding: 17px;
+  color: #7de2d1;
+}
+
+.outcome-card strong,
+.outcome-card span {
+  display: block;
+}
+
+.outcome-card strong {
+  color: #fff8ec;
+  font-size: 17px;
+}
+
+.outcome-card span {
+  color: rgba(245, 241, 232, 0.62);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.workflow-section {
+  padding: 34px 0 24px;
+}
+
+.section-heading p {
+  max-width: 690px;
+  color: rgba(245, 241, 232, 0.7);
+  line-height: 1.7;
+}
+
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.workflow-card {
+  min-height: 228px;
+  padding: 16px;
+}
+
+.workflow-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  color: #f3c66e;
+}
+
+.workflow-card-top span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #17120a;
+  font-size: 13px;
+  font-weight: 900;
+  background: #f3c66e;
+}
+
+.workflow-card strong {
+  display: block;
+  color: #fff8ec;
+  font-size: 18px;
+}
+
+.workflow-card p,
+.faq-item p {
+  margin: 8px 0 0;
+  color: rgba(245, 241, 232, 0.66);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .panel {
   padding: 22px;
 }
@@ -614,6 +841,26 @@ a {
   margin-top: 26px;
 }
 
+.faq-section {
+  padding: 28px 0 10px;
+}
+
+.faq-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.faq-item {
+  padding: 18px;
+}
+
+.faq-item strong {
+  color: #fff8ec;
+  font-size: 17px;
+}
+
 .price-card {
   display: flex;
   flex-direction: column;
@@ -725,7 +972,9 @@ a {
   }
 
   .trust-strip,
-  .pricing-grid {
+  .pricing-grid,
+  .buyer-strip,
+  .workflow-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -733,9 +982,17 @@ a {
 @media (max-width: 680px) {
   .topbar {
     min-height: auto;
-    align-items: flex-start;
+    align-items: center;
     gap: 14px;
     padding: 14px 16px;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand-copy small {
+    display: none;
   }
 
   .topbar-actions {
@@ -746,7 +1003,10 @@ a {
   .workspace-grid,
   .trust-strip,
   .pricing-section,
-  .deployment-band {
+  .deployment-band,
+  .buyer-strip,
+  .workflow-section,
+  .faq-section {
     width: min(100% - 28px, 1180px);
   }
 
@@ -776,7 +1036,10 @@ a {
   .metric-grid,
   .timeline,
   .trust-strip,
-  .pricing-grid {
+  .pricing-grid,
+  .buyer-strip,
+  .workflow-grid,
+  .faq-grid {
     grid-template-columns: 1fr;
   }
 

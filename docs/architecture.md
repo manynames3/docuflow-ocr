@@ -84,6 +84,7 @@ flowchart TB
 Cloudflare Pages hosts:
 
 - A React/Vite frontend in `frontend/`.
+- Hosted demo at [https://docuflow-ocr.pages.dev](https://docuflow-ocr.pages.dev).
 - Demo mode when `VITE_API_BASE_URL` is unset.
 - Live API mode when `VITE_API_BASE_URL` points at the deployed API Gateway URL.
 
@@ -113,7 +114,7 @@ npm --prefix frontend exec wrangler pages deploy dist --project-name docuflow-oc
 
 ## Key Constraints
 
-- There is no hosted demo URL committed in the repository.
+- The hosted Cloudflare Pages demo runs with synthetic data unless a live API URL is configured.
 - The frontend includes demo mode for hiring walkthroughs and API mode for real deployments.
 - The API has no authentication in version 1; production use would require auth and owner-scoped authorization.
 - S3 event triggers are intentionally not used; the explicit start endpoint keeps the demo deterministic.

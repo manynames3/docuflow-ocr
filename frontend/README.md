@@ -2,6 +2,8 @@
 
 Cloudflare Pages frontend for DocuFlow OCR. It is a React/Vite product surface for accounts payable invoice intake, OCR status, Accounts Payable field review, recent invoices, and customer-facing plans.
 
+Hosted demo: [https://docuflow-ocr.pages.dev](https://docuflow-ocr.pages.dev)
+
 ## Modes
 
 - Demo mode: used when `VITE_API_BASE_URL` is empty. This is useful for hiring-manager walkthroughs without deploying AWS.
