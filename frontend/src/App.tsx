@@ -508,7 +508,7 @@ export default function App() {
             GitHub
           </a>
         </nav>
-        <span className="footer-meta">Accounts Payable invoice automation demo.</span>
+        <span className="footer-meta">©2026 SUPREME AI VENTURES LLC</span>
       </footer>
     </main>
   );
