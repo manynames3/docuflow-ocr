@@ -98,30 +98,20 @@ export const pricingPlans = [
   {
     name: "Starter",
     price: "$49",
-    summary: "For small Accounts Payable teams moving invoice intake out of email and spreadsheets.",
-    features: [
-      "500 invoice pages/month",
-      "Accounts Payable review queue",
-      "CSV exports",
-      "Email support",
-    ],
+    summary: "For small teams processing invoices weekly.",
+    features: ["500 pages/month", "Review queue", "CSV exports"],
   },
   {
     name: "Operations",
     price: "$149",
-    summary: "For finance teams reviewing vendor invoices every day.",
-    features: [
-      "3,000 invoice pages/month",
-      "Approval audit trail",
-      "Faster processing",
-      "Accounting-ready exports",
-    ],
+    summary: "For finance teams reviewing invoices daily.",
+    features: ["3,000 pages/month", "Approval history", "Accounting-ready exports"],
     featured: true,
   },
   {
     name: "Enterprise",
     price: "Custom",
-    summary: "For shared services teams with custom controls and retention needs.",
-    features: ["Custom invoice volume", "Dedicated rollout", "Priority support", "Security review"],
+    summary: "For larger teams with rollout and security needs.",
+    features: ["Custom volume", "Dedicated rollout", "Security review"],
   },
 ];

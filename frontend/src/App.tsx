@@ -1,23 +1,18 @@
 import {
-  Activity,
   ArrowRight,
   BadgeCheck,
   Check,
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,
-  Clock3,
   Download,
   FileCheck2,
   FileText,
   Gauge,
-  Layers3,
-  Lock,
+  Github,
   Play,
   RefreshCw,
   SearchCheck,
-  ShieldCheck,
-  Sparkles,
   Upload,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -35,77 +30,26 @@ import type { IntakeMode, JobStatus, ReviewJob, TimelineEvent } from "./types";
 
 const pipelineSteps = ["CREATED", "UPLOADED", "PROCESSING", "NEEDS_REVIEW"] as const;
 
-const buyerOutcomes = [
-  {
-    icon: <Gauge size={20} />,
-    title: "Fewer keying mistakes",
-    text: "Capture vendor, invoice number, date, and total before anyone types them by hand.",
-  },
-  {
-    icon: <ClipboardCheck size={20} />,
-    title: "Exceptions first",
-    text: "Send uncertain totals and vendor fields to review instead of making the team check every page.",
-  },
-  {
-    icon: <ShieldCheck size={20} />,
-    title: "Cleaner approvals",
-    text: "Keep corrected values and approval decisions attached to each invoice record.",
-  },
-  {
-    icon: <Activity size={20} />,
-    title: "Finance-ready output",
-    text: "Prepare reviewed invoice data for export into the systems your team already uses.",
-  },
-];
-
 const workflowSteps = [
   {
     icon: <Upload size={20} />,
     title: "Receive",
-    text: "Upload invoice PDFs or images from vendors, shared inboxes, or monthly batches.",
+    text: "Upload vendor invoices.",
   },
   {
     icon: <FileText size={20} />,
     title: "Capture",
-    text: "Extract the fields Accounts Payable needs: vendor, invoice number, invoice date, and total.",
+    text: "Pull out vendor, date, number, and total.",
   },
   {
     icon: <SearchCheck size={20} />,
     title: "Review",
-    text: "Route only low-confidence values to a focused review queue for quick correction.",
+    text: "Check only uncertain fields.",
   },
   {
     icon: <CheckCircle2 size={20} />,
     title: "Approve",
-    text: "Approve the clean record and keep a history of what changed and who approved it.",
-  },
-  {
-    icon: <Download size={20} />,
-    title: "Export",
-    text: "Move reviewed invoice data downstream without rebuilding the invoice by hand.",
-  },
-];
-
-const faqItems = [
-  {
-    question: "Who uses DocuFlow day to day?",
-    answer:
-      "Accounts Payable specialists, finance operations analysts, and controllers who need a faster way to process vendor invoices without losing review control.",
-  },
-  {
-    question: "Does it approve every invoice automatically?",
-    answer:
-      "No. The product is designed around human review for uncertain fields, so finance teams can approve clean records and correct exceptions before export.",
-  },
-  {
-    question: "How would a team buy this?",
-    answer:
-      "Small teams can start with a self-serve plan. Larger finance teams would usually book a demo, test a sample invoice set, review security needs, and choose a volume-based plan.",
-  },
-  {
-    question: "What files does the workflow support?",
-    answer:
-      "The demo is built around invoice PDFs and common image formats such as PNG, JPG, TIFF, and scanned invoice files.",
+    text: "Send clean records downstream.",
   },
 ];
 
@@ -324,44 +268,42 @@ export default function App() {
         <nav className="nav-links" aria-label="Primary">
           <a href="#product">Product</a>
           <a href="#workflow">Workflow</a>
-          <a href="#review">Review</a>
           <a href="#pricing">Plans</a>
         </nav>
         <div className="topbar-actions">
           <a className="demo-link" href="#workspace">View demo</a>
           <a className="topbar-cta" href="#pricing">Start trial</a>
-          <button className="icon-button" type="button" aria-label="Refresh workspace">
-            <RefreshCw size={17} />
-          </button>
         </div>
       </header>
 
       <section className="hero-band" id="product">
-        <div className="hero-copy">
-          <span className="eyebrow">Accounts Payable invoice automation</span>
-          <h1>Turn vendor invoices into approved accounting records.</h1>
+        <div className="hero-copy animate-in">
+          <span className="eyebrow">Accounts Payable automation</span>
+          <h1>Invoice processing. Less manual entry.</h1>
           <p>
-            DocuFlow captures invoice numbers, dates, vendor details, and totals, then sends only
-            uncertain fields to review before your finance team exports the clean record.
+            Capture fields, review exceptions, and approve clean records.
           </p>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={handleStart} disabled={processing}>
               {processing ? <RefreshCw className="spin" size={18} /> : <Play size={18} />}
               Try sample invoice
             </button>
-            <a className="secondary-button" href="#pricing">
-              See plans
-              <ArrowRight size={18} />
-            </a>
-          </div>
-          <div className="buyer-note" aria-label="Buyer fit">
-            <span>For Accounts Payable teams</span>
-            <span>Self-serve trial or sales demo</span>
-            <span>Volume-based plans</span>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={18} />
+              Upload invoice
+            </button>
           </div>
         </div>
 
-        <section className="command-surface" id="workspace" aria-label="Invoice intake command center">
+        <section
+          className="command-surface animate-in delay-1"
+          id="workspace"
+          aria-label="Invoice intake command center"
+        >
           <div className="surface-header">
             <div>
               <span className="surface-kicker">Live product workspace</span>
@@ -410,24 +352,14 @@ export default function App() {
         </section>
       </section>
 
-      <section className="buyer-strip" aria-label="Finance team outcomes">
-        {buyerOutcomes.map((outcome) => (
-          <Outcome key={outcome.title} {...outcome} />
-        ))}
-      </section>
-
       <section className="workflow-section" id="workflow">
         <div className="section-heading">
-          <span className="eyebrow">How teams use it</span>
-          <h2>From vendor invoice to approved record.</h2>
-          <p>
-            The product is built for the everyday Accounts Payable path: receive invoices, capture
-            the fields, review exceptions, approve the record, and move it downstream.
-          </p>
+          <span className="eyebrow">Workflow</span>
+          <h2>From invoice to approved record.</h2>
         </div>
         <div className="workflow-grid">
           {workflowSteps.map((step, index) => (
-            <WorkflowStep key={step.title} step={`${index + 1}`} {...step} />
+            <WorkflowStep key={step.title} delay={index + 1} step={`${index + 1}`} {...step} />
           ))}
         </div>
       </section>
@@ -507,25 +439,10 @@ export default function App() {
         </section>
       </section>
 
-      <section className="trust-strip" aria-label="Platform capabilities">
-        <Capability
-          icon={<Layers3 size={20} />}
-          title="Less manual entry"
-          text="Capture invoice fields before review"
-        />
-        <Capability icon={<SearchCheck size={20} />} title="Review the exceptions" text="Focus on uncertain totals and vendors" />
-        <Capability icon={<ShieldCheck size={20} />} title="Approval history" text="Keep a record of every decision" />
-        <Capability icon={<Activity size={20} />} title="Ready for accounting" text="Prepare clean invoice records" />
-      </section>
-
       <section className="pricing-section" id="pricing">
         <div className="section-heading">
-          <span className="eyebrow">How teams buy</span>
-          <h2>Start with a sample invoice. Scale by monthly volume.</h2>
-          <p>
-            Smaller teams can start self-serve. Finance teams with higher invoice volume can book a
-            rollout review and validate DocuFlow on their own invoice samples.
-          </p>
+          <span className="eyebrow">Plans</span>
+          <h2>Start small. Scale by invoice volume.</h2>
         </div>
         <div className="pricing-grid">
           {pricingPlans.map((plan) => (
@@ -552,84 +469,72 @@ export default function App() {
         </div>
       </section>
 
-      <section className="faq-section" aria-label="Buyer questions">
-        <div className="section-heading">
-          <span className="eyebrow">Buyer questions</span>
-          <h2>What a finance buyer needs to know.</h2>
-        </div>
-        <div className="faq-grid">
-          {faqItems.map((item) => (
-            <FaqItem key={item.question} {...item} />
-          ))}
-        </div>
-      </section>
-
-      <section className="deployment-band" id="platform">
+      <section className="closing-section" aria-label="Try DocuFlow">
         <div>
-          <span className="eyebrow">Built for finance teams</span>
-          <h2>One workspace for invoice intake, review, and approval.</h2>
-          <p>
-            Give Accounts Payable analysts a single place to upload vendor invoices, verify
-            extracted fields, and approve clean records before they move downstream.
-          </p>
+          <span className="eyebrow">Ready to test it?</span>
+          <h2>Run a sample invoice through the workspace.</h2>
+          <p>See the intake, extraction, review queue, and approval flow in one pass.</p>
         </div>
-        <div className="deployment-stack">
-          <span>
-            <Lock size={16} />
-            Direct invoice uploads
-          </span>
-          <span>
-            <Sparkles size={16} />
-            Review uncertain totals first
-          </span>
-          <span>
-            <Clock3 size={16} />
-            Approval history for finance teams
-          </span>
+        <div className="closing-actions">
+          <button className="primary-button" type="button" onClick={handleStart} disabled={processing}>
+            {processing ? <RefreshCw className="spin" size={18} /> : <Play size={18} />}
+            Try sample invoice
+          </button>
+          <a
+            className="secondary-button"
+            href="https://github.com/manynames3/docuflow-ocr"
+            rel="noreferrer"
+            target="_blank"
+          >
+            <Github size={18} />
+            View GitHub
+          </a>
         </div>
       </section>
-    </main>
-  );
-}
 
-function Outcome({ icon, text, title }: { icon: ReactNode; text: string; title: string }) {
-  return (
-    <article className="outcome-card">
-      {icon}
-      <strong>{title}</strong>
-      <span>{text}</span>
-    </article>
+      <footer className="site-footer">
+        <a className="footer-brand" href="#workspace" aria-label="DocuFlow OCR home">
+          <BrandMark />
+          <span className="brand-copy">
+            <strong>DocuFlow</strong>
+            <small>Invoice Control</small>
+          </span>
+        </a>
+        <nav className="footer-links" aria-label="Footer">
+          <a href="#product">Product</a>
+          <a href="#workflow">Workflow</a>
+          <a href="#pricing">Plans</a>
+          <a href="https://github.com/manynames3/docuflow-ocr" rel="noreferrer" target="_blank">
+            GitHub
+          </a>
+        </nav>
+        <span className="footer-meta">Accounts Payable invoice automation demo.</span>
+      </footer>
+    </main>
   );
 }
 
 function WorkflowStep({
   icon,
+  delay,
   step,
   text,
   title,
 }: {
   icon: ReactNode;
+  delay: number;
   step: string;
   text: string;
   title: string;
 }) {
   return (
-    <article className="workflow-card">
+    <article className={`workflow-card animate-in delay-${delay}`}>
       <div className="workflow-card-top">
         <span>{step}</span>
         {icon}
       </div>
       <strong>{title}</strong>
       <p>{text}</p>
-    </article>
-  );
-}
-
-function FaqItem({ answer, question }: { answer: string; question: string }) {
-  return (
-    <article className="faq-item">
-      <strong>{question}</strong>
-      <p>{answer}</p>
     </article>
   );
 }
@@ -660,25 +565,5 @@ function Metric({ icon, label, value }: { icon: ReactNode; label: string; value:
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
-  );
-}
-
-function Capability({
-  icon,
-  text,
-  title,
-}: {
-  icon: ReactNode;
-  text: string;
-  title: string;
-}) {
-  return (
-    <article className="capability">
-      {icon}
-      <div>
-        <strong>{title}</strong>
-        <span>{text}</span>
-      </div>
-    </article>
   );
 }
