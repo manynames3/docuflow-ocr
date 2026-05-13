@@ -1,22 +1,18 @@
 import {
   ArrowRight,
-  BadgeCheck,
   Check,
   CheckCircle2,
   ChevronRight,
-  ClipboardCheck,
   Download,
   FileCheck2,
   FileText,
-  Gauge,
-  Github,
   Play,
   RefreshCw,
   SearchCheck,
   Upload,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ChangeEvent } from "react";
 import {
   createUpload,
   getJob,
@@ -32,25 +28,50 @@ const pipelineSteps = ["CREATED", "UPLOADED", "PROCESSING", "NEEDS_REVIEW"] as c
 
 const workflowSteps = [
   {
-    icon: <Upload size={20} />,
     title: "Receive",
     text: "Upload vendor invoices.",
   },
   {
-    icon: <FileText size={20} />,
     title: "Capture",
     text: "Pull out vendor, date, number, and total.",
   },
   {
-    icon: <SearchCheck size={20} />,
     title: "Review",
     text: "Check only uncertain fields.",
   },
   {
-    icon: <CheckCircle2 size={20} />,
     title: "Approve",
     text: "Send clean records downstream.",
   },
+];
+
+const proofPoints = [
+  {
+    title: "More than text extraction",
+    text: "OCR captures the invoice text; DocuFlow turns uncertain values into review tasks.",
+  },
+  {
+    title: "Built for the approval step",
+    text: "Teams can verify vendor, date, invoice number, and total before records move downstream.",
+  },
+  {
+    title: "Cleaner accounting handoff",
+    text: "Approved records can be exported as CSV or sent through the API to an accounting workflow.",
+  },
+];
+
+const useCases = [
+  "Vendor invoices",
+  "Monthly invoice batches",
+  "Exception review",
+  "Accounting handoff prep",
+];
+
+const trustPoints = [
+  "Private document storage",
+  "Temporary upload links",
+  "Human approval for uncertain fields",
+  "Automatic document expiration",
 ];
 
 function statusLabel(status: JobStatus) {
@@ -91,6 +112,15 @@ function normalizeJob(job: Partial<ReviewJob>, fallbackFilename: string): Review
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function scrollToReviewOutput(delay = 0) {
+  window.setTimeout(() => {
+    document.getElementById("review-output")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, delay);
 }
 
 export default function App() {
@@ -214,10 +244,12 @@ export default function App() {
   async function handleStart() {
     if (hasApiBackend() && selectedFile) {
       await runApi(selectedFile);
+      scrollToReviewOutput(100);
       return;
     }
 
     await runDemo(selectedFile?.name);
+    scrollToReviewOutput(900);
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -262,27 +294,36 @@ export default function App() {
           <BrandMark />
           <span className="brand-copy">
             <strong>DocuFlow</strong>
-            <small>Invoice Control</small>
+            <small>Invoice review automation</small>
           </span>
         </a>
-        <nav className="nav-links" aria-label="Primary">
-          <a href="#product">Product</a>
-          <a href="#workflow">Workflow</a>
-          <a href="#pricing">Plans</a>
-        </nav>
+        <span className="topbar-pill">Accounts Payable</span>
         <div className="topbar-actions">
-          <a className="demo-link" href="#workspace">View demo</a>
-          <a className="topbar-cta" href="#pricing">Start trial</a>
+          <a className="demo-link" href="#review-output">How it works</a>
+          <a className="topbar-cta" href="#workspace">Start trial</a>
         </div>
       </header>
+
+      <nav className="pill-nav" aria-label="Product sections">
+        <a href="#product">Product</a>
+        <a href="#review-output">Workflow</a>
+        <a href="#use-cases">Use cases</a>
+        <a href="#trust">Trust</a>
+        <a href="#pricing">Plans</a>
+      </nav>
 
       <section className="hero-band" id="product">
         <div className="hero-copy animate-in">
           <span className="eyebrow">Accounts Payable automation</span>
-          <h1>Invoice processing. Less manual entry.</h1>
+          <h1>Invoice review without the <span>copy-paste</span>.</h1>
           <p>
-            Capture fields, review exceptions, and approve clean records.
+            Built for teams that receive vendor invoices and still review totals, dates, and vendor details by hand.
           </p>
+          <div className="hero-tags" aria-label="Common invoice review tasks">
+            {useCases.map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={handleStart} disabled={processing}>
               {processing ? <RefreshCw className="spin" size={18} /> : <Play size={18} />}
@@ -299,14 +340,16 @@ export default function App() {
           </div>
         </div>
 
-        <section
-          className="command-surface animate-in delay-1"
-          id="workspace"
-          aria-label="Invoice intake command center"
-        >
+        <section className="command-surface animate-in delay-1" id="workspace" aria-label="Invoice review demo">
+          <div className="window-chrome">
+            <span />
+            <span />
+            <span />
+            <small>Invoice review</small>
+          </div>
           <div className="surface-header">
             <div>
-              <span className="surface-kicker">Live product workspace</span>
+              <span className="surface-kicker">Live workspace</span>
               <h2>Accounts Payable Intake</h2>
             </div>
             <span className={`status-badge status-${activeJob.status.toLowerCase()}`}>
@@ -334,11 +377,20 @@ export default function App() {
             </button>
           </div>
 
-          <div className="metric-grid" aria-label="Operational metrics">
-            <Metric icon={<Gauge size={18} />} label="Confidence score" value={`${activeJob.confidence.score}%`} />
-            <Metric icon={<ClipboardCheck size={18} />} label="Needs review" value={`${reviewCount}`} />
-            <Metric icon={<BadgeCheck size={18} />} label="Approved" value={`${approvedCount}`} />
-          </div>
+          <dl className="snapshot-grid" aria-label="Invoice review snapshot">
+            <div>
+              <dt>Confidence</dt>
+              <dd>{activeJob.confidence.score}%</dd>
+            </div>
+            <div>
+              <dt>Needs review</dt>
+              <dd>{reviewCount}</dd>
+            </div>
+            <div>
+              <dt>Approved</dt>
+              <dd>{approvedCount}</dd>
+            </div>
+          </dl>
 
           <div className="timeline">
             {timeline.map((item) => (
@@ -349,121 +401,164 @@ export default function App() {
               </div>
             ))}
           </div>
+          <a className="surface-link" href="#review-output">
+            View extracted fields
+            <ArrowRight size={16} />
+          </a>
         </section>
       </section>
 
-      <section className="workflow-section" id="workflow">
-        <div className="section-heading">
-          <span className="eyebrow">Workflow</span>
-          <h2>From invoice to approved record.</h2>
+      <section className="editorial-section" id="review-output">
+        <div className="section-copy">
+          <span className="eyebrow">Sample output</span>
+          <h2>From invoice PDF to reviewed fields.</h2>
+          <p>
+            Run the sample and DocuFlow updates the field verification panel and recent invoice queue in the same workspace.
+          </p>
+          <ol className="workflow-list">
+            {workflowSteps.map((step) => (
+              <li key={step.title}>
+                <strong>{step.title}</strong>
+                <span>{step.text}</span>
+              </li>
+            ))}
+          </ol>
         </div>
-        <div className="workflow-grid">
-          {workflowSteps.map((step, index) => (
-            <WorkflowStep key={step.title} delay={index + 1} step={`${index + 1}`} {...step} />
+        <div className="workspace-grid">
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Accounts Payable review</span>
+                <h2>Invoice field verification</h2>
+              </div>
+              <button className="secondary-button small" type="button" onClick={approveJob}>
+                <CheckCircle2 size={17} />
+                Approve
+              </button>
+            </div>
+
+            <div className="field-list">
+              {fields.length > 0 ? (
+                fields.map(([field, details]) => (
+                  <label className="field-row" key={field}>
+                    <span>
+                      <strong>{field.replace(/_/g, " ")}</strong>
+                      <small>{details.source_key}</small>
+                    </span>
+                    <input
+                      value={correctedFields[field] || ""}
+                      onChange={(event) =>
+                        setCorrectedFields((current) => ({
+                          ...current,
+                          [field]: event.target.value,
+                        }))
+                      }
+                    />
+                    <em className={`confidence ${confidenceTone(details.confidence)}`}>
+                      {details.confidence.toFixed(1)}%
+                    </em>
+                  </label>
+                ))
+              ) : (
+                <div className="empty-state">
+                  <SearchCheck size={22} />
+                  <strong>Invoice details pending</strong>
+                  <span>The review fields will appear when extraction finishes.</span>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Invoice queue</span>
+                <h2>Recent invoices</h2>
+              </div>
+              <button className="icon-button dark" type="button" aria-label="Download report">
+                <Download size={17} />
+              </button>
+            </div>
+
+            <div className="job-list">
+              {jobs.map((job) => (
+                <button className="job-row" key={job.job_id} type="button" onClick={() => setActiveJob(job)}>
+                  <span className="job-file">
+                    <FileCheck2 size={18} />
+                    <span>
+                      <strong>{job.filename}</strong>
+                      <small>{job.owner_id}</small>
+                    </span>
+                  </span>
+                  <span className={`status-badge status-${job.status.toLowerCase()}`}>
+                    {statusLabel(job.status)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section className="split-section" id="use-cases">
+        <div>
+          <span className="eyebrow">Why not just OCR?</span>
+          <h2>Extraction is only the first step.</h2>
+        </div>
+        <div className="proof-list">
+          {proofPoints.map((item) => (
+            <article key={item.title}>
+              <strong>{item.title}</strong>
+              <p>{item.text}</p>
+            </article>
           ))}
         </div>
       </section>
 
-      <section className="workspace-grid">
-        <section className="panel" id="review">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Accounts Payable review</span>
-              <h2>Invoice field verification</h2>
-            </div>
-            <button className="secondary-button small" type="button" onClick={approveJob}>
-              <CheckCircle2 size={17} />
-              Approve
-            </button>
-          </div>
-
-          <div className="field-list">
-            {fields.length > 0 ? (
-              fields.map(([field, details]) => (
-                <label className="field-row" key={field}>
-                  <span>
-                    <strong>{field.replace(/_/g, " ")}</strong>
-                    <small>{details.source_key}</small>
-                  </span>
-                  <input
-                    value={correctedFields[field] || ""}
-                    onChange={(event) =>
-                      setCorrectedFields((current) => ({
-                        ...current,
-                        [field]: event.target.value,
-                      }))
-                    }
-                  />
-                  <em className={`confidence ${confidenceTone(details.confidence)}`}>
-                    {details.confidence.toFixed(1)}%
-                  </em>
-                </label>
-              ))
-            ) : (
-              <div className="empty-state">
-                <SearchCheck size={22} />
-                <strong>Invoice details pending</strong>
-                <span>The review fields will appear when extraction finishes.</span>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Invoice queue</span>
-              <h2>Recent invoices</h2>
-            </div>
-            <button className="icon-button dark" type="button" aria-label="Download report">
-              <Download size={17} />
-            </button>
-          </div>
-
-          <div className="job-list">
-            {jobs.map((job) => (
-              <button className="job-row" key={job.job_id} type="button" onClick={() => setActiveJob(job)}>
-                <span className="job-file">
-                  <FileCheck2 size={18} />
-                  <span>
-                    <strong>{job.filename}</strong>
-                    <small>{job.owner_id}</small>
-                  </span>
-                </span>
-                <span className={`status-badge status-${job.status.toLowerCase()}`}>
-                  {statusLabel(job.status)}
-                </span>
-              </button>
+      <section className="split-section trust-section" id="trust">
+        <div>
+          <span className="eyebrow">Trust</span>
+          <h2>Review control, not black-box automation.</h2>
+        </div>
+        <div>
+          <p>
+            DocuFlow avoids pretending OCR is perfect. Uncertain fields stay visible until someone approves the invoice record.
+          </p>
+          <ul className="trust-list">
+            {trustPoints.map((item) => (
+              <li key={item}>
+                <Check size={16} />
+                {item}
+              </li>
             ))}
-          </div>
-        </section>
+          </ul>
+        </div>
       </section>
 
       <section className="pricing-section" id="pricing">
-        <div className="section-heading">
+        <div>
           <span className="eyebrow">Plans</span>
-          <h2>Start small. Scale by invoice volume.</h2>
+          <h2>Start with the invoice volume you need.</h2>
+          <p>Pick the invoice volume that matches your team. Upgrade when review work becomes daily.</p>
         </div>
-        <div className="pricing-grid">
+        <div className="pricing-options">
           {pricingPlans.map((plan) => (
-            <article className={`price-card ${plan.featured ? "featured" : ""}`} key={plan.name}>
-              <div>
-                <span className="plan-name">{plan.name}</span>
-                <h3>{plan.price}</h3>
-                <p>{plan.summary}</p>
+            <article className={`price-option ${plan.featured ? "featured" : ""}`} key={plan.name}>
+              <div className="price-option-head">
+                <span>{plan.name}</span>
+                {plan.featured ? <em>Daily teams</em> : null}
               </div>
+              <strong>{plan.price}</strong>
+              <p>{plan.summary}</p>
               <ul>
                 {plan.features.map((feature) => (
-                  <li key={feature}>
-                    <Check size={16} />
-                    {feature}
-                  </li>
+                  <li key={feature}>{feature}</li>
                 ))}
               </ul>
-              <button className={plan.featured ? "primary-button full" : "secondary-button full"} type="button">
-                Choose {plan.name}
+              <a className={plan.featured ? "primary-button" : "secondary-button"} href="#workspace">
+                {plan.name === "Enterprise" ? "Talk to sales" : `Start ${plan.name}`}
                 <ArrowRight size={17} />
-              </button>
+              </a>
             </article>
           ))}
         </div>
@@ -472,22 +567,17 @@ export default function App() {
       <section className="closing-section" aria-label="Try DocuFlow">
         <div>
           <span className="eyebrow">Ready to test it?</span>
-          <h2>Run a sample invoice through the workspace.</h2>
-          <p>See the intake, extraction, review queue, and approval flow in one pass.</p>
+          <h2>Try the invoice workflow.</h2>
+          <p>See the intake, extracted fields, review queue, and approval flow in one pass.</p>
         </div>
         <div className="closing-actions">
           <button className="primary-button" type="button" onClick={handleStart} disabled={processing}>
             {processing ? <RefreshCw className="spin" size={18} /> : <Play size={18} />}
             Try sample invoice
           </button>
-          <a
-            className="secondary-button"
-            href="https://github.com/manynames3/docuflow-ocr"
-            rel="noreferrer"
-            target="_blank"
-          >
-            <Github size={18} />
-            View GitHub
+          <a className="secondary-button" href="#pricing">
+            View plans
+            <ArrowRight size={17} />
           </a>
         </div>
       </section>
@@ -502,40 +592,14 @@ export default function App() {
         </a>
         <nav className="footer-links" aria-label="Footer">
           <a href="#product">Product</a>
-          <a href="#workflow">Workflow</a>
+          <a href="#review-output">Workflow</a>
+          <a href="#use-cases">Use cases</a>
+          <a href="#trust">Trust</a>
           <a href="#pricing">Plans</a>
-          <a href="https://github.com/manynames3/docuflow-ocr" rel="noreferrer" target="_blank">
-            GitHub
-          </a>
         </nav>
         <span className="footer-meta">©2026 SUPREME AI VENTURES LLC</span>
       </footer>
     </main>
-  );
-}
-
-function WorkflowStep({
-  icon,
-  delay,
-  step,
-  text,
-  title,
-}: {
-  icon: ReactNode;
-  delay: number;
-  step: string;
-  text: string;
-  title: string;
-}) {
-  return (
-    <article className={`workflow-card animate-in delay-${delay}`}>
-      <div className="workflow-card-top">
-        <span>{step}</span>
-        {icon}
-      </div>
-      <strong>{title}</strong>
-      <p>{text}</p>
-    </article>
   );
 }
 
@@ -555,15 +619,5 @@ function BrandMark() {
         <path className="brand-mark-flow" d="M7.5 13.5h7.5M7.5 24h7.5M7.5 34.5h7.5" />
       </svg>
     </span>
-  );
-}
-
-function Metric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="metric">
-      {icon}
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
