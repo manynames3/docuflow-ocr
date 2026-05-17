@@ -273,6 +273,7 @@ a {
 }
 
 .hero-band,
+.problem-section,
 .editorial-section,
 .split-section,
 .pricing-section,
@@ -306,6 +307,7 @@ a {
 }
 
 .hero-copy h1,
+.problem-section h2,
 .editorial-section h2,
 .split-section h2,
 .pricing-section h2,
@@ -329,6 +331,7 @@ a {
 
 .hero-copy p,
 .section-copy p,
+.pain-card p,
 .split-section p,
 .pricing-section p,
 .closing-section p,
@@ -623,6 +626,15 @@ a {
   color: var(--accent);
 }
 
+.problem-section {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.74fr) minmax(0, 1.26fr);
+  gap: 58px;
+  padding: 80px 0 60px;
+  align-items: start;
+  scroll-margin-top: 150px;
+}
+
 .editorial-section {
   display: grid;
   grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
@@ -637,6 +649,7 @@ a {
   padding-top: 18px;
 }
 
+.problem-section h2,
 .editorial-section h2,
 .split-section h2,
 .pricing-section h2,
@@ -646,11 +659,39 @@ a {
 }
 
 .section-copy p,
+.pain-card p,
 .split-section p,
 .pricing-section p,
 .closing-section p {
   margin: 18px 0 0;
   font-size: 16px;
+}
+
+.pain-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pain-card {
+  min-height: 226px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(23, 28, 35, 0.05);
+}
+
+.pain-card strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.pain-card p {
+  margin: 16px 0 0;
+  font-size: 15px;
 }
 
 .workflow-list {
@@ -1031,6 +1072,7 @@ a {
 
 @media (max-width: 1120px) {
   .hero-band,
+  .problem-section,
   .editorial-section,
   .split-section,
   .pricing-section {
@@ -1050,11 +1092,16 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .pain-grid {
+    grid-template-columns: 1fr;
+  }
+
 }
 
 @media (max-width: 720px) {
   .topbar,
   .hero-band,
+  .problem-section,
   .editorial-section,
   .split-section,
   .pricing-section,
@@ -1117,6 +1164,7 @@ a {
   .hero-copy,
   .section-copy,
   .command-surface,
+  .pain-grid,
   .workspace-grid,
   .panel,
   .pricing-options {
@@ -1129,6 +1177,7 @@ a {
     overflow-wrap: break-word;
   }
 
+  .problem-section h2,
   .editorial-section h2,
   .split-section h2,
   .pricing-section h2,
@@ -1139,6 +1188,7 @@ a {
 
   .hero-copy p,
   .section-copy p,
+  .pain-card p,
   .split-section p,
   .pricing-section p,
   .closing-section p {
@@ -1294,6 +1344,7 @@ a {
     line-height: 1.42;
   }
 
+  .problem-section,
   .editorial-section,
   .split-section,
   .pricing-section {
@@ -1307,6 +1358,15 @@ a {
 
   .section-copy {
     padding-top: 0;
+  }
+
+  .pain-card {
+    min-height: auto;
+    padding: 18px;
+  }
+
+  .pain-card strong {
+    font-size: 18px;
   }
 
   .workflow-list {

@@ -47,24 +47,39 @@ const workflowSteps = [
 
 const proofPoints = [
   {
-    title: "More than text extraction",
+    title: "Need more than extracted text?",
     text: "OCR captures the invoice text; DocuFlow turns uncertain values into review tasks.",
   },
   {
-    title: "Built for the approval step",
+    title: "Need a controlled approval step?",
     text: "Teams can verify vendor, date, invoice number, and total before records move downstream.",
   },
   {
-    title: "Cleaner accounting handoff",
+    title: "Need a cleaner accounting handoff?",
     text: "Approved records can be exported as CSV or sent through the API to an accounting workflow.",
   },
 ];
 
 const useCases = [
-  "Vendor invoices",
-  "Monthly invoice batches",
-  "Exception review",
-  "Accounting handoff prep",
+  "Manual invoice entry",
+  "Vendor field checks",
+  "Low-confidence totals",
+  "Approval-ready exports",
+];
+
+const painQuestions = [
+  {
+    question: "Are invoices piling up in email and shared folders?",
+    answer: "Use one intake workspace for invoice PDFs and images instead of chasing attachments.",
+  },
+  {
+    question: "Are vendor names, dates, and totals still being retyped?",
+    answer: "Capture the key fields into editable review rows before they move into accounting.",
+  },
+  {
+    question: "Does OCR still leave someone checking the numbers?",
+    answer: "Keep uncertain fields visible with confidence scores so reviewers know what needs attention.",
+  },
 ];
 
 const trustPoints = [
@@ -306,18 +321,18 @@ export default function App() {
 
       <nav className="pill-nav" aria-label="Product sections">
         <a href="#product">Product</a>
+        <a href="#problem">Problem</a>
         <a href="#review-output">Workflow</a>
-        <a href="#use-cases">Use cases</a>
         <a href="#trust">Trust</a>
         <a href="#pricing">Plans</a>
       </nav>
 
       <section className="hero-band" id="product">
         <div className="hero-copy animate-in">
-          <span className="eyebrow">Accounts Payable automation</span>
-          <h1>Invoice review without the <span>copy-paste</span>.</h1>
+          <span className="eyebrow">For Accounts Payable teams</span>
+          <h1>Still keying invoice details by <span>hand?</span></h1>
           <p>
-            Built for teams that receive vendor invoices and still review totals, dates, and vendor details by hand.
+            DocuFlow turns vendor invoices into review-ready records, so your team can check uncertain fields instead of retyping every total, date, and vendor name.
           </p>
           <div className="hero-tags" aria-label="Common invoice review tasks">
             {useCases.map((item) => (
@@ -406,6 +421,24 @@ export default function App() {
             <ArrowRight size={16} />
           </a>
         </section>
+      </section>
+
+      <section className="problem-section" id="problem">
+        <div className="section-copy">
+          <span className="eyebrow">The problem</span>
+          <h2>Invoice work gets slow when every PDF needs a person.</h2>
+          <p>
+            Accounts Payable teams do not just need OCR. They need a way to capture invoice data, see what looks risky, and approve clean records without losing track of the queue.
+          </p>
+        </div>
+        <div className="pain-grid">
+          {painQuestions.map((item) => (
+            <article className="pain-card" key={item.question}>
+              <strong>{item.question}</strong>
+              <p>{item.answer}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="editorial-section" id="review-output">
@@ -503,7 +536,7 @@ export default function App() {
       <section className="split-section" id="use-cases">
         <div>
           <span className="eyebrow">Why not just OCR?</span>
-          <h2>Extraction is only the first step.</h2>
+          <h2>Because finance still has to trust the result.</h2>
         </div>
         <div className="proof-list">
           {proofPoints.map((item) => (
@@ -593,7 +626,7 @@ export default function App() {
         <nav className="footer-links" aria-label="Footer">
           <a href="#product">Product</a>
           <a href="#review-output">Workflow</a>
-          <a href="#use-cases">Use cases</a>
+          <a href="#problem">Problem</a>
           <a href="#trust">Trust</a>
           <a href="#pricing">Plans</a>
         </nav>
