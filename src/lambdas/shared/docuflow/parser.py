@@ -96,10 +96,13 @@ def extract_key_values(textract_response: dict[str, Any]) -> dict[str, dict[str,
         value_text, value_confidence = _text_and_confidence(value_block, blocks_by_id)
         normalized_key = normalize_key(key_text)
         confidence = round(min(key_confidence, value_confidence), 2)
+        geometry = value_block.get("Geometry", {}).get("BoundingBox")
         extracted[normalized_key] = {
             "key": key_text,
             "value": value_text,
             "confidence": confidence,
+            "page": value_block.get("Page", block.get("Page")),
+            "geometry": geometry,
         }
 
     return extracted
@@ -115,6 +118,8 @@ def parse_textract_response(textract_response: dict[str, Any]) -> dict[str, Any]
             "value": item["value"],
             "confidence": item["confidence"],
             "source_key": item["key"],
+            "page": item["page"],
+            "geometry": item["geometry"],
         }
         existing = fields.get(field_name)
         if not existing or candidate["confidence"] > existing["confidence"]:

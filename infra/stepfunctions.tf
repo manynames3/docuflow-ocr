@@ -10,7 +10,7 @@ resource "aws_sfn_state_machine" "document_workflow" {
   role_arn = aws_iam_role.sfn_exec.arn
 
   logging_configuration {
-    include_execution_data = true
+    include_execution_data = false
     level                  = "ERROR"
     log_destination        = "${aws_cloudwatch_log_group.sfn.arn}:*"
   }
@@ -61,7 +61,7 @@ resource "aws_sfn_state_machine" "document_workflow" {
           {
             Variable     = "$.textract_status"
             StringEquals = "IN_PROGRESS"
-            Next         = "WaitForTextract"
+            Next         = "CheckTextractPollLimit"
           },
           {
             Variable     = "$.textract_status"
@@ -70,6 +70,17 @@ resource "aws_sfn_state_machine" "document_workflow" {
           }
         ]
         Default = "FailureHandler"
+      }
+      CheckTextractPollLimit = {
+        Type = "Choice"
+        Choices = [
+          {
+            Variable                 = "$.poll_count"
+            NumericGreaterThanEquals = 120
+            Next                     = "FailureHandler"
+          }
+        ]
+        Default = "WaitForTextract"
       }
       ParseAndScore = {
         Type     = "Task"

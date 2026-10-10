@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Controlled invoice test evidence</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        width: 1200px;
+        height: 1600px;
+        margin: 0;
+        padding: 84px;
+        color: #20282d;
+        background: #f3f5f4;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      main {
+        height: 100%;
+        padding: 70px 74px;
+        background: white;
+        border: 2px solid #dce2df;
+      }
+      .evidence {
+        margin-bottom: 58px;
+        padding: 14px 18px;
+        color: #8f372c;
+        border: 2px solid #df9e91;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 2px;
+      }
+      .brand { color: #167450; font-size: 30px; font-weight: 700; }
+      .brand-note { margin-top: 9px; color: #68757b; font-size: 18px; }
+      h1 { margin: 60px 0 36px; font-size: 52px; letter-spacing: 1px; }
+      .rule { height: 2px; background: #dce2df; }
+      .details { display: flex; justify-content: space-between; margin: 36px 0 58px; }
+      .detail { width: 46%; font-size: 20px; line-height: 1.8; }
+      .label { display: block; color: #6c777d; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+      .items { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 20px; }
+      .items th { padding: 20px 12px; background: #edf3f0; text-align: left; }
+      .items td { padding: 24px 12px; border-bottom: 1px solid #dce2df; }
+      .items .amount { text-align: right; }
+      .totals { width: 42%; margin: 44px 0 0 auto; font-size: 20px; }
+      .total-row { display: flex; justify-content: space-between; padding: 14px 0; }
+      .grand-total { margin-top: 10px; border-top: 2px solid #20282d; font-size: 28px; font-weight: 700; }
+      footer { margin-top: 80px; color: #68757b; font-size: 17px; line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="evidence">CONTROLLED TEST EVIDENCE - NOT FOR PAYMENT</div>
+      <div class="brand">Northstar Test Supplies</div>
+      <div class="brand-note">Fictional supplier created for a one-page OCR test</div>
+      <h1>INVOICE</h1>
+      <div class="rule"></div>
+      <section class="details">
+        <div class="detail">
+          <span class="label">BILL TO</span>
+          DocuFlow OCR Test Account<br />
+          100 Example Street<br />
+          Test City, ZZ 00000
+        </div>
+        <div class="detail">
+          <span class="label">INVOICE DETAILS</span>
+          Invoice number: NST-20418<br />
+          Invoice date: October 10, 2026<br />
+          Due date: October 24, 2026<br />
+          Purchase order: TEST-PO-481
+        </div>
+      </section>
+      <div class="rule"></div>
+      <table class="items">
+        <thead>
+          <tr><th>Description</th><th>Quantity</th><th class="amount">Amount</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Fictional office supply bundle</td><td>1</td><td class="amount">$230.00</td></tr>
+          <tr><td>Test shipping charge</td><td>1</td><td class="amount">$0.00</td></tr>
+        </tbody>
+      </table>
+      <section class="totals">
+        <div class="total-row"><span>Subtotal</span><span>$230.00</span></div>
+        <div class="total-row"><span>Tax</span><span>$18.00</span></div>
+        <div class="total-row grand-total"><span>TOTAL DUE</span><span>$248.00</span></div>
+      </section>
+      <footer>This fictional document is test evidence only. It is not an offer, bill, or payment request.</footer>
+    </main>
+  </body>
+</html>

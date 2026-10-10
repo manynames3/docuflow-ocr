@@ -13,4 +13,10 @@ STATUSES = {
 
 TERMINAL_STATUSES = {"COMPLETED", "FAILED", "APPROVED", "REJECTED"}
 
-SUPPORTED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
+SUPPORTED_MIME_TYPES = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+}
+SUPPORTED_EXTENSIONS = set(SUPPORTED_MIME_TYPES)

@@ -15,8 +15,9 @@ def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     first_page = textract.get_document_analysis(JobId=job_id, MaxResults=1000)
     status = first_page["JobStatus"]
 
+    poll_count = int(event.get("poll_count", 0)) + 1
     if status in {"IN_PROGRESS", "FAILED"}:
-        return {**event, "textract_status": status}
+        return {**event, "textract_status": status, "poll_count": poll_count}
 
     blocks = first_page.get("Blocks", [])
     next_token = first_page.get("NextToken")
@@ -32,7 +33,10 @@ def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         "Blocks": blocks,
         "Warnings": first_page.get("Warnings", []),
     }
-    output_key = f"textract/{event['job_id']}/raw.json"
+    output_key = (
+        f"textract/{event['owner_id']}/{event['job_id']}/"
+        f"attempt-{event['processing_attempt']}/raw.json"
+    )
     s3.put_object(
         Bucket=os.environ["DOCUMENTS_BUCKET"],
         Key=output_key,
@@ -45,4 +49,5 @@ def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         "textract_status": status,
         "textract_s3_key": output_key,
         "textract_block_count": len(blocks),
+        "poll_count": poll_count,
     }

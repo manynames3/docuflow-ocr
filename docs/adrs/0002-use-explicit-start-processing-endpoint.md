@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-S3 event notifications could start processing after upload, but they add asynchronous event wiring and make demos harder to control. The portfolio goal is to show the workflow clearly and reliably.
+S3 event notifications could start processing after upload. The browser must also know that the upload completed before a job should be billed for OCR, and an explicit endpoint provides a clear transition from customer upload to processing.
 
 ## Decision
 
@@ -14,5 +14,5 @@ Use `POST /jobs/{job_id}/start` after the client uploads the document to the pre
 
 ## Consequences
 
-The caller controls when processing begins, demos are deterministic, and status transitions are easier to explain. The tradeoff is that clients must make one extra API call after upload.
+The API verifies ownership and confirms that the uploaded object exists before starting the workflow. The client makes one additional API call after upload, and retry behavior is explicit.
 

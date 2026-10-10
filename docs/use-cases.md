@@ -46,4 +46,4 @@ Extract employee names, IDs, dates, signed acknowledgments, and form fields from
 
 ## Why The Frontend Focuses On Accounts Payable
 
-The live product surface should tell one clear story. Accounts payable is the best default because it is easy for hiring managers and business stakeholders to understand quickly, while still showing enterprise-grade cloud engineering: upload, OCR, confidence scoring, review, audit, observability, and infrastructure as code.
+The product surface focuses on one clear workflow. Accounts Payable is the strongest initial use case because finance teams can understand the manual-entry problem and the review/export path directly. Other document types would need their own field model, validation rules, and customer requirements before they could be supported.

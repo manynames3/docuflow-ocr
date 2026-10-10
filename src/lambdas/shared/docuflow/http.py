@@ -9,9 +9,17 @@ def json_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
         "statusCode": status_code,
         "headers": {
             "content-type": "application/json",
-            "access-control-allow-origin": "*",
+            "cache-control": "no-store",
         },
         "body": json.dumps(body, default=str),
+    }
+
+
+def text_response(status_code: int, body: str, content_type: str) -> dict[str, Any]:
+    return {
+        "statusCode": status_code,
+        "headers": {"content-type": content_type, "cache-control": "no-store"},
+        "body": body,
     }
 
 
@@ -33,3 +41,9 @@ def path_param(event: dict[str, Any], name: str) -> str | None:
 
 def route_key(event: dict[str, Any]) -> str:
     return event.get("routeKey") or f"{event.get('httpMethod', '')} {event.get('resource', '')}"
+
+
+def request_header(event: dict[str, Any], name: str) -> str | None:
+    headers = event.get("headers") or {}
+    target = name.lower()
+    return next((value for key, value in headers.items() if key.lower() == target), None)

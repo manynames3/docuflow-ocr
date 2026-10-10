@@ -25,6 +25,8 @@ def test_parse_textract_response_extracts_normalized_fields() -> None:
     assert parsed["fields"]["vendor_name"]["value"] == "Acme Services"
     assert parsed["fields"]["document_date"]["value"] == "2026-05-01"
     assert parsed["fields"]["total_amount"]["value"] == "$421.19"
+    assert parsed["fields"]["total_amount"]["page"] == 1
+    assert parsed["fields"]["total_amount"]["geometry"]["Left"] == 0.7
     assert parsed["fields"]["email"]["value"] == "billing@example.com"
     assert parsed["fields"]["case_number"]["value"] == "CASE-1001"
     assert parsed["metrics"]["field_count"] == 5

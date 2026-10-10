@@ -1,123 +1,125 @@
 # Architecture
 
-DocuFlow OCR is a product-facing accounts payable invoice-processing system with a Cloudflare Pages frontend and a serverless AWS backend deployed with Terraform. The system accepts invoice PDFs/images through a presigned S3 upload flow, stores job state in DynamoDB, uses Step Functions to orchestrate asynchronous Textract OCR, parses normalized invoice fields in Python Lambda, and routes uncertain totals or vendor fields to a finance review API.
+DocuFlow OCR is an Accounts Payable invoice intake and review application. Cloudflare Pages serves the React client; AWS provides customer identity, the authenticated API, private document storage, OCR orchestration, and durable review state. Terraform defines the AWS resources.
 
-## Container Diagram
+## Containers
 
 ```mermaid
-flowchart TB
-    User["Accounts Payable analyst or finance reviewer"]
+flowchart LR
+    Customer["Accounts Payable user"]
 
     subgraph Cloudflare["Cloudflare"]
-        Frontend["Cloudflare Pages frontend\nReact, TypeScript, Vite"]
+        Web["DocuFlow web app\nReact, TypeScript, Vite"]
     end
 
     subgraph AWS["AWS account"]
-        API["API Gateway HTTP API\nRoutes invoice upload, processing, status, and review requests"]
+        Cognito["Amazon Cognito\naccount sign-up, login, recovery"]
+        API["API Gateway HTTP API\nCognito JWT authorizer"]
 
-        subgraph Lambdas["Python 3.12 Lambda functions"]
-            CreateUpload["create_upload\nCreates invoice job and presigned S3 URL"]
-            StartProcessing["start_processing\nStarts workflow execution"]
-            ValidateInput["validate_input\nChecks uploaded S3 object"]
-            StartTextract["textract_start\nStarts async Textract analysis"]
-            GetTextract["textract_get_results\nPolls and stores OCR JSON"]
-            ParseScore["parse_and_score\nNormalizes fields and scores confidence"]
-            ReviewAPI["review_api\nLists review queue and records decisions"]
-            FailureHandler["failure_handler\nMarks failed jobs and writes DLQ message"]
+        subgraph Functions["AWS Lambda, Python 3.12"]
+            Upload["create_upload\nidentity, quota, upload policy"]
+            Start["start_processing\nowned job and workflow start"]
+            Review["review_api\nreview, history, export, delete"]
+            Validate["validate_input\nfile signature, size, page count"]
+            TextractStart["textract_start"]
+            TextractPoll["textract_get_results"]
+            Parse["parse_and_score"]
+            Failure["failure_handler"]
         end
 
-        SFN["Step Functions state machine\nValidation, OCR polling, parse, route, failure handling"]
-        Textract["Amazon Textract\nStartDocumentAnalysis with FORMS and TABLES"]
-        S3["S3 documents bucket\nraw invoices and textract JSON"]
-        Jobs["DynamoDB jobs table\ninvoice state, fields, confidence, review status"]
-        Audit["DynamoDB audit table\ninvoice approval decisions"]
-        DLQ["SQS workflow DLQ\nfailed workflow payloads"]
-        Logs["CloudWatch\nLambda/API/SFN logs and alarms"]
+        Workflow["AWS Step Functions\nvalidation, async OCR, retries, routing"]
+        OCR["Amazon Textract\nFORMS and TABLES"]
+        Source["Private S3 bucket\nsource invoice and OCR JSON"]
+        Jobs["DynamoDB jobs\nowner, status, fields, corrections"]
+        Audit["DynamoDB audit\ncorrection and decision history"]
+        Quotas["DynamoDB quota\n100 submissions per account/day"]
+        DLQ["SQS dead-letter queue\njob ID and generic error code"]
+        Logs["CloudWatch\nservice logs, alarms"]
     end
 
-    User --> Frontend
-    Frontend --> API
-    Frontend --> S3
-    API --> CreateUpload
-    API --> StartProcessing
-    API --> ReviewAPI
-    CreateUpload --> Jobs
-    CreateUpload --> S3
-    StartProcessing --> SFN
-    SFN --> ValidateInput
-    ValidateInput --> S3
-    SFN --> StartTextract
-    StartTextract --> Textract
-    SFN --> GetTextract
-    GetTextract --> Textract
-    GetTextract --> S3
-    SFN --> ParseScore
-    ParseScore --> S3
-    ParseScore --> Jobs
-    ReviewAPI --> Jobs
-    ReviewAPI --> Audit
-    SFN --> FailureHandler
-    FailureHandler --> Jobs
-    FailureHandler --> DLQ
+    Customer --> Web
+    Web <-->|"OAuth authorization code + PKCE"| Cognito
+    Web -->|"Bearer access token"| API
+    Web -->|"short-lived signed upload / preview"| Source
+    API --> Upload
+    API --> Start
+    API --> Review
+    Upload --> Jobs
+    Upload --> Quotas
+    Upload -->|"presigned POST"| Web
+    Start --> Workflow
+    Workflow --> Validate
+    Validate --> Source
+    Validate --> Jobs
+    Workflow --> TextractStart
+    TextractStart --> OCR
+    Workflow --> TextractPoll
+    TextractPoll --> OCR
+    TextractPoll --> Source
+    Workflow --> Parse
+    Parse --> Source
+    Parse --> Jobs
+    Review --> Jobs
+    Review --> Audit
+    Review --> Source
+    Workflow --> Failure
+    Failure --> Jobs
+    Failure --> DLQ
     API --> Logs
-    Lambdas --> Logs
-    SFN --> Logs
+    Functions --> Logs
+    Workflow --> Logs
 ```
 
 ## Runtime Flow
 
-1. A user opens the Cloudflare Pages frontend.
-2. The frontend calls `POST /uploads` with an invoice filename, content type, and optional owner ID.
-3. `create_upload` creates a DynamoDB invoice job item in `CREATED` status and returns a presigned S3 `PUT` URL.
-4. The frontend uploads the invoice PDF or image directly to S3 under `raw/{owner_id}/{job_id}/{filename}`.
-5. The frontend calls `POST /jobs/{job_id}/start` when the upload is complete.
-6. `start_processing` marks the job `PROCESSING` and starts a Step Functions execution.
-7. The workflow validates the S3 object, starts Textract document analysis, waits, and polls for completion.
-8. `textract_get_results` stores raw Textract JSON in S3 under `textract/{job_id}/raw.json`.
-9. `parse_and_score` extracts normalized invoice fields, calculates confidence, and updates DynamoDB.
-10. High-confidence invoice jobs become `COMPLETED`; low-confidence or incomplete jobs become `NEEDS_REVIEW`.
-11. Review endpoints list queued invoice jobs, return extracted fields, accept corrections, and write approve/reject audit records.
-12. Workflow failures are marked `FAILED` and sent to the SQS DLQ.
+1. A customer signs up or signs in through Cognito managed login. The browser uses OAuth authorization code with PKCE and keeps tokens in tab-scoped session storage.
+2. The browser sends the Cognito access token to API Gateway. API Gateway verifies the JWT; Lambda derives the workspace owner from the verified `sub` claim. The request body cannot choose an owner.
+3. `POST /uploads` validates filename, declared MIME type, byte count, SHA-256, and idempotency key. It creates an owner-scoped job, applies a 5-submission-per-account daily quota, then returns a 15-minute S3 presigned POST bounded to 10 MB, the declared content type, and the checksum metadata.
+4. The browser uploads directly to the private S3 bucket and calls `POST /jobs/{job_id}/start`. If an upload is interrupted or its response is lost, `POST /jobs/{job_id}/upload-url` checks the owner and checksum, then either confirms the object is already present or issues a fresh upload form. The start API checks ownership and object presence, makes the state transition conditional, then starts Step Functions with an attempt-specific execution name.
+5. `validate_input` checks the actual S3 size, MIME metadata, file signature, PDF encryption, page count, and SHA-256 of the stored bytes. PDFs are limited to 5 pages; PNG and JPEG are single-page inputs. Invalid or changed files fail before Textract starts.
+6. Step Functions starts asynchronous Textract `StartDocumentAnalysis`, waits 15 seconds between status checks, and stops after 120 polls. Transient Lambda errors retry; workflow failures set a generic customer-visible failure code and send a minimal message to the SQS dead-letter queue.
+7. Textract results are stored in S3. `parse_and_score` normalizes invoice header fields and retains confidence plus source-page geometry when Textract provides it. Complete high-confidence results become `COMPLETED`; uncertain or incomplete results become `NEEDS_REVIEW`.
+8. The authenticated review API returns only the customer's jobs. The browser can request a five-minute signed URL for the source, save corrections, inspect the correction/decision history, and approve or reject the invoice.
+9. `GET /exports/invoices.csv` exports only `APPROVED` records. Saved corrections take precedence over extracted values; formula-like cell values are escaped. `DELETE /jobs/{job_id}` prevents processing/deletion races, removes the source and all attempt-scoped OCR objects, clears audit history, then removes the job.
+
+## API Routes
+
+| Method | Route | Access |
+| --- | --- | --- |
+| `GET` | `/health` | Public health status |
+| `POST` | `/uploads` | Authenticated customer |
+| `POST` | `/jobs/{job_id}/upload-url` | Authenticated owner; recover interrupted upload |
+| `POST` | `/jobs/{job_id}/start` | Authenticated owner |
+| `GET` | `/jobs` | Authenticated owner; paginated history |
+| `GET` | `/jobs/{job_id}` | Authenticated owner |
+| `GET` | `/jobs/{job_id}/document` | Authenticated owner; five-minute URL |
+| `GET` | `/jobs/{job_id}/history` | Authenticated owner |
+| `PATCH` | `/jobs/{job_id}/review` | Authenticated owner |
+| `POST` | `/jobs/{job_id}/decision` | Authenticated owner |
+| `DELETE` | `/jobs/{job_id}` | Authenticated owner |
+| `GET` | `/exports/invoices.csv` | Authenticated owner |
 
 ## Deployment Shape
 
-Cloudflare Pages hosts:
+- Cloudflare Pages serves a static Vite build. The build requires `VITE_API_BASE_URL`, `VITE_COGNITO_AUTH_DOMAIN`, and `VITE_COGNITO_CLIENT_ID`; the OAuth redirect defaults to the current site origin plus `/auth/callback`.
+- Terraform creates an email-verified Cognito user pool and public app client, API Gateway JWT authorizer, Lambda functions, Step Functions, S3, DynamoDB jobs/audit/quota tables, SQS DLQ, IAM, and CloudWatch resources.
+- The frontend workflow builds for pull requests and pushes. It skips the Pages deploy unless Cloudflare credentials and product connection variables are present.
+- `make package` vendors `pypdf` only into the `validate_input` Lambda package. All functions receive a shared execution role scoped to this application's resources; per-function roles are not implemented.
+- This repository's AWS resources are infrastructure definitions, not evidence of a live deployment. Configure and deploy the AWS stack and frontend separately.
 
-- A React/Vite frontend in `frontend/`.
-- Hosted demo at [https://docuflow-ocr.pages.dev](https://docuflow-ocr.pages.dev).
-- Demo mode when `VITE_API_BASE_URL` is unset.
-- Live API mode when `VITE_API_BASE_URL` points at the deployed API Gateway URL.
+## Data And Security Boundaries
 
-Terraform creates:
+- Each Cognito `sub` is an isolated customer workspace. Team members, shared organizations, and role-based access are not implemented.
+- API Gateway protects every route except `/health`; each Lambda customer route also requires the JWT subject claim. Ownership is checked for job reads, source URLs, review changes, history, deletion, and exports. Workflow writes are conditional on the job owner.
+- S3 blocks public access, uses server-side encryption, denies non-TLS transport, and expires all objects after 30 days. Upload and preview URLs are time-limited bearer capabilities.
+- DynamoDB uses on-demand billing and TTL on jobs, audit entries, and daily quota records. TTL processing is asynchronous; it is not an exact deletion-time guarantee.
+- CloudWatch API access logs omit request bodies. Step Functions does not log execution input/output. Failure records and SQS messages omit invoice content and extraction values.
+- There is no payment/entitlement system, external accounting integration, configurable retention, backup/restore workflow, or compliance certification.
 
-- API Gateway HTTP API routes for upload, job status, processing start, and review decisions.
-- Lambda functions packaged from `src/lambdas/*` by `scripts/package_lambdas.py`.
-- A Step Functions state machine that invokes workflow Lambdas and handles polling, retries, catches, and routing.
-- An S3 bucket for raw uploaded documents and raw Textract output.
-- DynamoDB tables for job state and review audit records.
-- An SQS DLQ for failed workflow payloads.
-- CloudWatch log groups and alarms for failed Step Functions executions and DLQ depth.
-- IAM roles and policies scoped to the generated project resources where practical.
+## Constraints
 
-The deployment flow is:
-
-```bash
-make install
-make test
-make package
-terraform -chdir=infra init
-terraform -chdir=infra apply
-npm --prefix frontend install
-npm --prefix frontend run build
-npm --prefix frontend exec wrangler pages deploy dist --project-name docuflow-ocr --branch main
-```
-
-## Key Constraints
-
-- The hosted Cloudflare Pages demo runs with synthetic data unless a live API URL is configured.
-- The frontend includes demo mode for hiring walkthroughs and API mode for real deployments.
-- The API has no authentication in version 1; production use would require auth and owner-scoped authorization.
-- S3 event triggers are intentionally not used; the explicit start endpoint keeps the demo deterministic.
-- Textract is asynchronous and per-page billed, so test with small synthetic documents.
-- Parser tests use mock Textract fixtures and do not prove live Textract accuracy for every document type.
-- The first version favors portfolio clarity over production features such as multi-tenant auth, payment processing, custom ML, and long-term retention policies.
+- Inputs: PDF, PNG, or JPEG only; at most 10 MiB, 25 PDF pages, and 100 submissions per account per UTC day.
+- Processing can take up to roughly 30 minutes before the workflow stops polling. Status remains visible in the customer workspace; retry is available for transient failures.
+- The parser currently focuses on invoice header fields. It does not export invoice line items, reconcile against purchase orders, or write to an accounting system.
+- Textract charges per analyzed page. Cognito's default email delivery has account-level quotas; assess delivery needs before opening account creation broadly.
+- Unit tests and controlled browser tests do not replace a deployed Cognito/API/S3/Step Functions integration test. A real end-to-end release check requires the AWS resources and valid user credentials.

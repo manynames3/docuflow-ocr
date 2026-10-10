@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
+import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -42,6 +45,25 @@ def package_function(function_name: str) -> Path:
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zip_file:
         zip_file.write(handler_path, "handler.py")
         add_tree(zip_file, SHARED_ROOT)
+        if function_name == "validate_input":
+            with tempfile.TemporaryDirectory(prefix="docuflow-lambda-deps-") as dependency_dir:
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        "--disable-pip-version-check",
+                        "--no-compile",
+                        "--no-cache-dir",
+                        "--requirement",
+                        str(ROOT / "requirements-lambda.txt"),
+                        "--target",
+                        dependency_dir,
+                    ],
+                    check=True,
+                )
+                add_tree(zip_file, Path(dependency_dir))
 
     return zip_path
 

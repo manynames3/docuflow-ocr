@@ -9,5 +9,7 @@ __pycache__/
 build/
 dist/
 frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
 *.zip
 .DS_Store

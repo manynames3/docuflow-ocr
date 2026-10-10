@@ -1,656 +1,615 @@
 import {
-  ArrowRight,
+  AlertCircle,
+  ArrowDownToLine,
+  ArrowUpRight,
   Check,
   CheckCircle2,
   ChevronRight,
-  Download,
-  FileCheck2,
+  Clock3,
   FileText,
-  Play,
+  LoaderCircle,
+  LogOut,
   RefreshCw,
-  SearchCheck,
-  Upload,
+  ShieldCheck,
+  Trash2,
+  UploadCloud,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, DragEvent } from "react";
 import {
+  ApiError,
   createUpload,
+  deleteJob,
+  downloadExport,
+  fileSha256,
+  getDocumentUrl,
+  getHistory,
   getJob,
+  getJobs,
   hasApiBackend,
+  resumeUpload,
+  saveCorrections,
   startProcessing,
   submitReviewDecision,
   uploadToS3,
+  validateInvoiceFile,
 } from "./api";
-import { baseTimeline, completedJobs, pricingPlans, sampleJob } from "./demoData";
-import type { IntakeMode, JobStatus, ReviewJob, TimelineEvent } from "./types";
+import {
+  accessToken,
+  beginAuth,
+  completeAuthRedirect,
+  currentUser,
+  endSession,
+  hasAuthConfiguration,
+} from "./auth";
+import type { InvoiceHistoryEntry, JobStatus, ReviewJob, UploadResponse } from "./types";
 
-const pipelineSteps = ["CREATED", "UPLOADED", "PROCESSING", "NEEDS_REVIEW"] as const;
+const FIELD_LABELS: Record<string, string> = {
+  vendor_name: "Vendor",
+  invoice_number: "Invoice number",
+  document_date: "Invoice date",
+  due_date: "Due date",
+  total_amount: "Total due",
+  currency: "Currency",
+  purchase_order: "Purchase order",
+  tax_amount: "Tax",
+  billing_address: "Billing address",
+};
+const FIELD_ORDER = Object.keys(FIELD_LABELS);
 
-const workflowSteps = [
-  {
-    title: "Receive",
-    text: "Upload vendor invoices.",
-  },
-  {
-    title: "Capture",
-    text: "Pull out vendor, date, number, and total.",
-  },
-  {
-    title: "Review",
-    text: "Check only uncertain fields.",
-  },
-  {
-    title: "Approve",
-    text: "Send clean records downstream.",
-  },
-];
-
-const proofPoints = [
-  {
-    title: "Need more than extracted text?",
-    text: "OCR captures the invoice text; DocuFlow turns uncertain values into review tasks.",
-  },
-  {
-    title: "Need a controlled approval step?",
-    text: "Teams can verify vendor, date, invoice number, and total before records move downstream.",
-  },
-  {
-    title: "Need a cleaner accounting handoff?",
-    text: "Approved records can be exported as CSV or sent through the API to an accounting workflow.",
-  },
-];
-
-const useCases = [
-  "Manual invoice entry",
-  "Vendor field checks",
-  "Low-confidence totals",
-  "Approval-ready exports",
-];
-
-const painQuestions = [
-  {
-    question: "Are invoices piling up in email and shared folders?",
-    answer: "Use one intake workspace for invoice PDFs and images instead of chasing attachments.",
-  },
-  {
-    question: "Are vendor names, dates, and totals still being retyped?",
-    answer: "Capture the key fields into editable review rows before they move into accounting.",
-  },
-  {
-    question: "Does OCR still leave someone checking the numbers?",
-    answer: "Keep uncertain fields visible with confidence scores so reviewers know what needs attention.",
-  },
-];
-
-const trustPoints = [
-  "Private document storage",
-  "Temporary upload links",
-  "Human approval for uncertain fields",
-  "Automatic document expiration",
-];
-
-function statusLabel(status: JobStatus) {
-  return status.replace("_", " ");
-}
-
-function confidenceTone(confidence: number) {
-  if (confidence >= 92) return "good";
-  if (confidence >= 85) return "warn";
-  return "risk";
-}
-
-function nextDemoJob(fileName?: string): ReviewJob {
+function statusText(status: JobStatus) {
   return {
-    ...sampleJob,
-    job_id: `demo-${Math.random().toString(16).slice(2, 10)}`,
-    filename: fileName || sampleJob.filename,
-    status: "CREATED",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
+    CREATED: "Upload ready",
+    UPLOADED: "Queued",
+    PROCESSING: "Processing",
+    COMPLETED: "Ready to export",
+    NEEDS_REVIEW: "Review needed",
+    FAILED: "Needs attention",
+    APPROVED: "Approved",
+    REJECTED: "Rejected",
+    DELETING: "Deleting",
+  }[status];
 }
 
-function normalizeJob(job: Partial<ReviewJob>, fallbackFilename: string): ReviewJob {
-  return {
-    ...sampleJob,
-    ...job,
-    filename: job.filename || fallbackFilename,
-    parsed_fields: job.parsed_fields || {},
-    confidence: job.confidence || {
-      score: 0,
-      average_confidence: 0,
-      threshold: 85,
-      review_reasons: ["processing"],
-    },
-  };
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-function wait(milliseconds: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+function formatSize(bytes: number) {
+  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function scrollToReviewOutput(delay = 0) {
-  window.setTimeout(() => {
-    document.getElementById("review-output")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, delay);
+function safeFilename(filename: string) {
+  return filename.replace(/\\/g, "/").split("/").pop()?.trim().replace(/[^A-Za-z0-9._ -]/gu, "_").slice(0, 120) || "";
+}
+
+function initialCorrections(job: ReviewJob) {
+  return Object.fromEntries(
+    FIELD_ORDER.map((name) => [
+      name,
+      job.corrected_fields?.[name] ?? job.parsed_fields?.[name]?.value ?? "",
+    ]),
+  );
 }
 
 export default function App() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [activeJob, setActiveJob] = useState<ReviewJob>(sampleJob);
-  const [jobs, setJobs] = useState<ReviewJob[]>([sampleJob, ...completedJobs]);
-  const [timeline, setTimeline] = useState<TimelineEvent[]>(baseTimeline);
-  const [processing, setProcessing] = useState(false);
-  const [mode, setMode] = useState<IntakeMode>(hasApiBackend() ? "api" : "demo");
-  const [notice, setNotice] = useState("Accounts Payable review queue ready");
-  const [correctedFields, setCorrectedFields] = useState<Record<string, string>>(
-    Object.fromEntries(
-      Object.entries(sampleJob.parsed_fields).map(([field, details]) => [field, details.value]),
-    ),
+  const [user, setUser] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [jobs, setJobs] = useState<ReviewJob[]>([]);
+  const [activeJob, setActiveJob] = useState<ReviewJob | null>(null);
+  const [activeId, setActiveId] = useState("");
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const [history, setHistory] = useState<InvoiceHistoryEntry[]>([]);
+  const [documentUrl, setDocumentUrl] = useState("");
+  const [documentError, setDocumentError] = useState("");
+  const [documentPage, setDocumentPage] = useState<number | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [noticeKind, setNoticeKind] = useState<"info" | "error" | "success">("info");
+  const [action, setAction] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const idempotencyKey = useRef(crypto.randomUUID());
+  const matchesActiveInvoice = Boolean(
+    file && activeJob && activeJob.status !== "DELETING" &&
+    activeJob.filename === safeFilename(file.name) && activeJob.content_length === file.size,
   );
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fields = useMemo(() => Object.entries(activeJob.parsed_fields), [activeJob.parsed_fields]);
-  const reviewCount = jobs.filter((job) => job.status === "NEEDS_REVIEW").length;
-  const approvedCount = jobs.filter((job) => ["APPROVED", "COMPLETED"].includes(job.status)).length;
-
-  function updateTimeline(activeIndex: number) {
-    const details = [
-      "Invoice record created",
-      "Invoice received",
-      "Invoice details being captured",
-      "Accounts Payable review queue updated",
-    ];
-    const labels = ["Intake", "Upload", "Extract", "Review"];
-
-    setTimeline(
-      pipelineSteps.map((step, index) => ({
-        label: labels[index] || step,
-        detail: details[index],
-        status: index < activeIndex ? "done" : index === activeIndex ? "active" : "queued",
-      })),
-    );
-  }
-
-  function mergeJob(job: ReviewJob) {
-    setJobs((current) => {
-      const withoutJob = current.filter((item) => item.job_id !== job.job_id);
-      return [job, ...withoutJob].slice(0, 6);
-    });
-  }
-
-  async function runDemo(fileName?: string) {
-    const demoJob = nextDemoJob(fileName);
-    setProcessing(true);
-    setMode(hasApiBackend() && selectedFile ? "api" : "demo");
-    setActiveJob(demoJob);
-    mergeJob(demoJob);
-    setCorrectedFields(
-      Object.fromEntries(
-        Object.entries(demoJob.parsed_fields).map(([field, details]) => [field, details.value]),
-      ),
-    );
-
-    const transitions: Array<{ status: JobStatus; notice: string }> = [
-      { status: "CREATED", notice: "Invoice upload URL issued" },
-      { status: "UPLOADED", notice: "Invoice received" },
-      { status: "PROCESSING", notice: "Capturing invoice details" },
-      { status: "NEEDS_REVIEW", notice: "Accounts Payable review queue updated" },
-    ];
-
-    transitions.forEach((transition, index) => {
-      window.setTimeout(() => {
-        updateTimeline(index);
-        setNotice(transition.notice);
-        setActiveJob((current) => {
-          const updated = {
-            ...current,
-            status: transition.status,
-            updated_at: new Date().toISOString(),
-          };
-          mergeJob(updated);
-          return updated;
-        });
-        if (index === transitions.length - 1) {
-          setProcessing(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const result = await completeAuthRedirect();
+      if (cancelled) return;
+      if (result.handled && result.error) setAuthError(result.error);
+      if (hasAuthConfiguration() && currentUser()) {
+        try {
+          await accessToken();
+          if (!cancelled) setUser(currentUser());
+        } catch {
+          if (!cancelled) setUser(null);
         }
-      }, index * 650);
-    });
-  }
-
-  async function runApi(file: File) {
-    setProcessing(true);
-    setMode("api");
-    setNotice("Creating upload");
-    updateTimeline(0);
-
-    try {
-      const upload = await createUpload(file);
-      setNotice("Uploading document");
-      updateTimeline(1);
-      await uploadToS3(file, upload);
-      setNotice("Preparing invoice review");
-      updateTimeline(2);
-      await startProcessing(upload.job_id);
-      let job = normalizeJob(await getJob(upload.job_id), file.name);
-      for (let attempt = 0; attempt < 8 && job.status === "PROCESSING"; attempt += 1) {
-        setNotice("Waiting for invoice details");
-        await wait(4000);
-        job = normalizeJob(await getJob(upload.job_id), file.name);
       }
-      setActiveJob(job);
-      mergeJob(job);
-      setCorrectedFields(
-        Object.fromEntries(
-          Object.entries(job.parsed_fields || {}).map(([field, details]) => [field, details.value]),
-        ),
-      );
-      setNotice("Invoice submitted");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "API request failed");
-    } finally {
-      setProcessing(false);
-    }
-  }
+      setAuthReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  async function handleStart() {
-    if (hasApiBackend() && selectedFile) {
-      await runApi(selectedFile);
-      scrollToReviewOutput(100);
+  const refreshJobs = useCallback(async () => {
+    const latest = await getJobs();
+    setJobs(latest);
+    if (!activeId && latest[0]) setActiveId(latest[0].job_id);
+  }, [activeId]);
+
+  useEffect(() => {
+    if (!user || !hasApiBackend()) return;
+    let cancelled = false;
+    void getJobs()
+      .then((latest) => {
+        if (cancelled) return;
+        setJobs(latest);
+        setActiveId((current) => current || latest[0]?.job_id || "");
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setNotice(error instanceof Error ? error.message : "Invoices could not be loaded.");
+          setNoticeKind("error");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !activeId) {
+      setActiveJob(null);
+      setDocumentUrl("");
+      setHistory([]);
       return;
     }
-
-    await runDemo(selectedFile?.name);
-    scrollToReviewOutput(900);
-  }
-
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] || null;
-    setSelectedFile(file);
-    if (file) {
-      setNotice(`${file.name} selected`);
-    }
-  }
-
-  async function approveJob() {
-    if (mode === "api" && hasApiBackend()) {
-      try {
-        await submitReviewDecision(activeJob.job_id, correctedFields);
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : "Review submission failed");
-        return;
-      }
-    }
-
-    const approvedJob: ReviewJob = {
-      ...activeJob,
-      status: "APPROVED",
-      corrected_fields: correctedFields,
-      updated_at: new Date().toISOString(),
+    let cancelled = false;
+    setDocumentError("");
+    setDocumentPage(null);
+    void getJob(activeId)
+      .then((job) => {
+        if (cancelled) return;
+        setActiveJob(job);
+        setFields(initialCorrections(job));
+        setJobs((current) => [job, ...current.filter((item) => item.job_id !== job.job_id)]);
+        if (job.status === "CREATED") {
+          setDocumentError("The upload has not finished yet.");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setNotice(error instanceof Error ? error.message : "Invoice details could not be loaded.");
+          setNoticeKind("error");
+        }
+      });
+    void getHistory(activeId)
+      .then((entries) => {
+        if (!cancelled) setHistory(entries);
+      })
+      .catch(() => {
+        if (!cancelled) setHistory([]);
+      });
+    return () => {
+      cancelled = true;
     };
-    setActiveJob(approvedJob);
-    mergeJob(approvedJob);
-    setNotice("Invoice approved");
-    setTimeline((current) =>
-      current.map((item) => ({
-        ...item,
-        status: "done",
-      })),
+  }, [activeId, user]);
+
+  useEffect(() => {
+    if (!user || !activeId || !activeJob || activeJob.status === "CREATED") {
+      setDocumentUrl("");
+      return;
+    }
+    let cancelled = false;
+    setDocumentError("");
+    void getDocumentUrl(activeId)
+      .then((url) => {
+        if (!cancelled) setDocumentUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setDocumentError("The original invoice is temporarily unavailable.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, activeJob?.status, user]);
+
+  useEffect(() => {
+    if (!user || activeJob?.status !== "PROCESSING") return;
+    let cancelled = false;
+    let timer = 0;
+    const poll = async () => {
+      try {
+        const latest = await getJob(activeJob.job_id);
+        if (cancelled) return;
+        setActiveJob(latest);
+        setJobs((current) => [latest, ...current.filter((item) => item.job_id !== latest.job_id)]);
+        if (latest.status !== "PROCESSING") {
+          setFields(initialCorrections(latest));
+          setNotice(latest.status === "FAILED" ? (latest.failure?.code === "DOCUMENT_INVALID" ? "This file could not be read. Check the supported format, 10 MB size limit, and 5-page limit." : "We could not process this invoice. It is still available in your history.") : "Invoice processing is complete.");
+          setNoticeKind(latest.status === "FAILED" ? "error" : "success");
+          void getHistory(latest.job_id).then(setHistory).catch(() => undefined);
+          void getDocumentUrl(latest.job_id).then(setDocumentUrl).catch(() => undefined);
+          return;
+        }
+      } catch {
+        if (!cancelled) {
+          setNotice("Connection interrupted. We will keep checking this invoice.");
+          setNoticeKind("info");
+        }
+      }
+      if (!cancelled) timer = window.setTimeout(poll, 2500);
+    };
+    timer = window.setTimeout(poll, 1800);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeJob?.job_id, activeJob?.status, user]);
+
+  const exportableCount = useMemo(
+    () => jobs.filter((job) => job.status === "APPROVED").length,
+    [jobs],
+  );
+  const changedFields = useMemo(() => {
+    if (!activeJob) return false;
+    return FIELD_ORDER.some((name) => {
+      const oldValue = activeJob.corrected_fields?.[name] ?? activeJob.parsed_fields?.[name]?.value ?? "";
+      return (fields[name] || "") !== oldValue;
+    });
+  }, [activeJob, fields]);
+
+  function chooseFile(nextFile?: File) {
+    setFileError("");
+    setFile(nextFile || null);
+    idempotencyKey.current = crypto.randomUUID();
+    if (nextFile) {
+      const validation = validateInvoiceFile(nextFile);
+      if (validation) setFileError(validation);
+    }
+  }
+
+  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
+    chooseFile(event.target.files?.[0]);
+  }
+
+  function onDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    chooseFile(event.dataTransfer.files[0]);
+  }
+
+  async function handleUpload() {
+    if (!file) {
+      setFileError("Choose an invoice to continue.");
+      fileInput.current?.focus();
+      return;
+    }
+    const validation = validateInvoiceFile(file);
+    if (validation) {
+      setFileError(validation);
+      return;
+    }
+    setAction("upload");
+    setNotice("Preparing a private upload...");
+    setNoticeKind("info");
+    let submittedJobId = "";
+    try {
+      const sha256 = await fileSha256(file);
+      let upload: UploadResponse;
+      if (matchesActiveInvoice && activeJob) {
+        try {
+          upload = await resumeUpload(activeJob.job_id, sha256);
+        } catch (error) {
+          if (!(error instanceof ApiError) || error.code !== "UPLOAD_CHECKSUM_MISMATCH") throw error;
+          upload = await createUpload(file, idempotencyKey.current, sha256);
+        }
+      } else {
+        upload = await createUpload(file, idempotencyKey.current, sha256);
+      }
+      submittedJobId = upload.job_id;
+      setActiveId(upload.job_id);
+      if (upload.upload_required) {
+        setNotice("Uploading invoice securely...");
+        await uploadToS3(file, upload);
+      }
+      if (upload.status === "CREATED" || upload.status === "FAILED") {
+        setNotice("Starting invoice processing...");
+        await startProcessing(upload.job_id);
+      }
+      const job = await getJob(upload.job_id);
+      setActiveJob(job);
+      setActiveId(job.job_id);
+      setJobs((current) => [job, ...current.filter((item) => item.job_id !== job.job_id)]);
+      setNotice(job.status === "FAILED"
+        ? (job.failure?.code === "DOCUMENT_INVALID" ? "This file could not be read. Check the supported format, 10 MB size limit, and 5-page limit." : "We could not process this invoice. You can retry or remove it.")
+        : job.status === "PROCESSING" || job.status === "UPLOADED" ? "This invoice is already processing."
+          : job.status === "NEEDS_REVIEW" || job.status === "COMPLETED" ? "This invoice is ready for review."
+            : job.status === "APPROVED" ? "This invoice is already approved."
+              : job.status === "REJECTED" ? "This invoice is already rejected."
+                : "Invoice received. Processing will appear here.");
+      setNoticeKind(job.status === "FAILED" ? "error" : "success");
+      setFile(null);
+      if (fileInput.current) fileInput.current.value = "";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The invoice could not be uploaded.";
+      setNotice(message);
+      setNoticeKind("error");
+      if (submittedJobId) {
+        try {
+          const job = await getJob(submittedJobId);
+          setActiveId(job.job_id);
+          setActiveJob(job);
+          setJobs((current) => [job, ...current.filter((item) => item.job_id !== job.job_id)]);
+        } catch {
+          // Keep the request error visible if the service is unreachable.
+        }
+      }
+    } finally {
+      setAction("");
+    }
+  }
+
+  async function retryProcessing() {
+    if (!activeJob) return;
+    setAction("retry");
+    setNotice("Retrying invoice processing...");
+    setNoticeKind("info");
+    try {
+      await startProcessing(activeJob.job_id);
+      const job = await getJob(activeJob.job_id);
+      setActiveJob(job);
+      setNotice("Invoice processing restarted.");
+      setNoticeKind("success");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Processing could not be restarted.");
+      setNoticeKind("error");
+    } finally {
+      setAction("");
+    }
+  }
+
+  async function saveReview() {
+    if (!activeJob) return;
+    setAction("save");
+    try {
+      await saveCorrections(activeJob.job_id, fields);
+      const job = await getJob(activeJob.job_id);
+      setActiveJob(job);
+      setJobs((current) => [job, ...current.filter((item) => item.job_id !== job.job_id)]);
+      setHistory(await getHistory(job.job_id));
+      setNotice("Your corrections are saved.");
+      setNoticeKind("success");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Corrections could not be saved.");
+      setNoticeKind("error");
+    } finally {
+      setAction("");
+    }
+  }
+
+  async function decide(decision: "APPROVE" | "REJECT") {
+    if (!activeJob) return;
+    setAction(decision.toLowerCase());
+    try {
+      if (changedFields) await saveCorrections(activeJob.job_id, fields);
+      await submitReviewDecision(activeJob.job_id, decision);
+      const job = await getJob(activeJob.job_id);
+      setActiveJob(job);
+      setJobs((current) => [job, ...current.filter((item) => item.job_id !== job.job_id)]);
+      setHistory(await getHistory(job.job_id));
+      setNotice(decision === "APPROVE" ? "Invoice approved." : "Invoice rejected.");
+      setNoticeKind("success");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The review decision could not be saved.");
+      setNoticeKind("error");
+    } finally {
+      setAction("");
+    }
+  }
+
+  async function removeInvoice() {
+    if (!activeJob || !window.confirm(`Delete ${activeJob.filename} and its saved review data?`)) return;
+    setAction("delete");
+    try {
+      await deleteJob(activeJob.job_id);
+      const remaining = jobs.filter((job) => job.job_id !== activeJob.job_id);
+      setJobs(remaining);
+      setActiveId(remaining[0]?.job_id || "");
+      setActiveJob(null);
+      setNotice("Invoice and its saved review data were deleted.");
+      setNoticeKind("success");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The invoice could not be deleted.");
+      setNoticeKind("error");
+    } finally {
+      setAction("");
+    }
+  }
+
+  async function exportInvoices() {
+    setAction("export");
+    try {
+      await downloadExport();
+      setNotice(exportableCount ? "Your invoice export has downloaded." : "The export is ready. It contains the column headers; no approved invoices are available yet.");
+      setNoticeKind("success");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The invoice export could not be created.");
+      setNoticeKind("error");
+    } finally {
+      setAction("");
+    }
+  }
+
+  if (!authReady) {
+    return <main className="loading-screen"><LoaderCircle aria-hidden="true" className="spin" /><span>Loading your workspace...</span></main>;
+  }
+
+  if (!user) {
+    const configured = hasAuthConfiguration() && hasApiBackend();
+    return (
+      <main className="landing">
+        <header className="landing-nav">
+          <a className="brand" href="/" aria-label="DocuFlow home"><span className="brand-mark"><FileText size={18} /></span><span>DocuFlow</span></a>
+          <div className="nav-actions">
+            <button className="button button-quiet" onClick={() => void beginAuth("login")} disabled={!configured}>Sign in</button>
+            <button className="button button-primary" onClick={() => void beginAuth("signup")} disabled={!configured}>Create account <ArrowUpRight size={16} /></button>
+          </div>
+        </header>
+        <section className="landing-hero">
+          <div className="hero-copy">
+            <p className="eyebrow">INVOICE PROCESSING</p>
+            <h1>Still typing invoice details by hand?</h1>
+            <p className="hero-description">DocuFlow reads vendor invoices, pulls out the key details, and gives your team a place to check and correct them before export.</p>
+            <div className="hero-actions">
+              <button className="button button-primary button-large" onClick={() => void beginAuth("signup")} disabled={!configured}>Create your account <ArrowUpRight size={17} /></button>
+              <span className="hero-login">Already have an account? <button onClick={() => void beginAuth("login")} disabled={!configured}>Sign in</button></span>
+            </div>
+            <div className="supported-line"><span>PDF, PNG, JPEG</span><span>Up to 10 MB</span><span>Up to 5 pages</span><span>5 uploads per account/day</span></div>
+          </div>
+          <div className="product-preview" aria-label="Invoice review workspace preview">
+            <div className="preview-top"><span className="preview-dot" /><span>WORKSPACE PREVIEW</span><span className="preview-state">ILLUSTRATIVE</span></div>
+            <div className="preview-body">
+              <div className="preview-document">
+                <div className="paper-brand">NORTHSTAR SUPPLY</div>
+                <div className="paper-rule" />
+                <div className="paper-title">INVOICE</div>
+                <div className="paper-grid"><span>Invoice no.</span><b>NS-20418</b><span>Date</span><b>May 12, 2026</b></div>
+                <div className="paper-line long" /><div className="paper-line" /><div className="paper-line short" />
+                <div className="paper-total"><span>AMOUNT DUE</span><b>$2,480.00</b></div>
+              </div>
+              <div className="preview-fields">
+                <div className="preview-fields-heading"><span>EXTRACTED FIELDS</span><span>3 of 5 verified</span></div>
+                {[["Vendor", "Northstar Supply", "verified"], ["Invoice number", "NS-20418", "verified"], ["Invoice date", "May 12, 2026", "verified"], ["Due date", "May 27, 2026", "review"], ["Total due", "$2,480.00", "verified"]].map(([label, value, status]) => (
+                  <div className="preview-field" key={label}><span>{label}</span><b>{value}</b><span className={`mini-check ${status}`}>{status === "verified" ? <Check size={12} /> : "Check"}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="preview-foot"><span><ShieldCheck size={14} /> Private invoice storage</span><span>CSV export</span></div>
+          </div>
+        </section>
+        <section className="landing-proof" aria-label="Service details">
+          <div><strong>Less retyping</strong><span>Invoice details become editable fields.</span></div>
+          <div><strong>Human review</strong><span>Check extracted values before they leave your team.</span></div>
+          <div><strong>Clear retention</strong><span>Documents expire after 30 days or can be deleted sooner.</span></div>
+        </section>
+        {!configured && <p className="config-note" role="status">Account access and invoice processing are not configured for this site yet.</p>}
+        {authError && <p className="config-note error-note" role="alert">{authError}</p>}
+        <footer className="landing-footer"><span>©2026 SUPREME AI VENTURES LLC</span><button onClick={() => void beginAuth("forgotPassword")} disabled={!configured}>Forgot password?</button></footer>
+      </main>
     );
   }
 
+  const previewIsPdf = activeJob?.content_type === "application/pdf";
+  const reviewReady = Boolean(activeJob && ["NEEDS_REVIEW", "COMPLETED", "APPROVED", "REJECTED"].includes(activeJob.status));
+  const finalStatus = activeJob?.status === "APPROVED" || activeJob?.status === "REJECTED";
+
   return (
-    <main className="product-shell">
-      <header className="topbar">
-        <a className="brand" href="#workspace" aria-label="DocuFlow OCR home">
-          <BrandMark />
-          <span className="brand-copy">
-            <strong>DocuFlow</strong>
-            <small>Invoice review automation</small>
-          </span>
-        </a>
-        <span className="topbar-pill">Accounts Payable</span>
-        <div className="topbar-actions">
-          <a className="demo-link" href="#review-output">How it works</a>
-          <a className="topbar-cta" href="#workspace">Start trial</a>
+    <main className="app-shell">
+      <header className="workspace-nav">
+        <a className="brand" href="/" aria-label="DocuFlow home"><span className="brand-mark"><FileText size={18} /></span><span>DocuFlow</span></a>
+        <div className="workspace-title"><span>Accounts Payable</span><small>Invoice workspace</small></div>
+        <div className="account-actions">
+          <span className="account-email">{user}</span>
+          <button className="icon-button" onClick={exportInvoices} disabled={action === "export"} aria-label="Export approved invoices" title="Export approved invoices"><ArrowDownToLine size={18} /></button>
+          <button className="icon-button" onClick={endSession} aria-label="Sign out" title="Sign out"><LogOut size={18} /></button>
         </div>
       </header>
 
-      <nav className="pill-nav" aria-label="Product sections">
-        <a href="#product">Product</a>
-        <a href="#problem">Problem</a>
-        <a href="#review-output">Workflow</a>
-        <a href="#trust">Trust</a>
-        <a href="#pricing">Plans</a>
-      </nav>
+      {notice && <div className={`notice notice-${noticeKind}`} role={noticeKind === "error" ? "alert" : "status"}><span>{noticeKind === "error" ? <AlertCircle size={17} /> : noticeKind === "success" ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}</span><p>{notice}</p><button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
 
-      <section className="hero-band" id="product">
-        <div className="hero-copy animate-in">
-          <span className="eyebrow">For Accounts Payable teams</span>
-          <h1>Still keying invoice details by <span>hand?</span></h1>
-          <p>
-            DocuFlow turns vendor invoices into review-ready records, so your team can check uncertain fields instead of retyping every total, date, and vendor name.
-          </p>
-          <div className="hero-tags" aria-label="Common invoice review tasks">
-            {useCases.map((item) => (
-              <span key={item}>{item}</span>
-            ))}
-          </div>
-          <div className="hero-actions">
-            <button className="primary-button" type="button" onClick={handleStart} disabled={processing}>
-              {processing ? <RefreshCw className="spin" size={18} /> : <Play size={18} />}
-              Try sample invoice
+      <section className="workspace-layout">
+        <aside className="inbox-panel">
+          <div className="section-heading"><div><p className="eyebrow">YOUR DOCUMENTS</p><h1>Invoices</h1></div><button className="icon-button" onClick={() => void refreshJobs().catch(() => undefined)} aria-label="Refresh invoices" title="Refresh"><RefreshCw size={16} /></button></div>
+
+          <div className={`upload-box ${dragging ? "dragging" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
+            <input ref={fileInput} id="invoice-file" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={onFileChange} />
+            <button className="upload-select" onClick={() => fileInput.current?.click()} disabled={action === "upload"}>
+              <UploadCloud size={20} />
+              <span>{file ? file.name : "Choose an invoice"}</span>
+              <small>{file ? formatSize(file.size) : "or drop a file here"}</small>
             </button>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload size={18} />
-              Upload invoice
+            <button className="button button-primary upload-button" disabled={!file || Boolean(fileError) || action === "upload"} onClick={() => void handleUpload()}>
+              {action === "upload" ? <LoaderCircle size={16} className="spin" /> : <UploadCloud size={16} />}
+              {action === "upload" ? "Uploading" : matchesActiveInvoice ? activeJob?.status === "CREATED" ? "Resume upload" : "Open invoice" : "Process invoice"}
             </button>
-          </div>
-        </div>
-
-        <section className="command-surface animate-in delay-1" id="workspace" aria-label="Invoice review demo">
-          <div className="window-chrome">
-            <span />
-            <span />
-            <span />
-            <small>Invoice review</small>
-          </div>
-          <div className="surface-header">
-            <div>
-              <span className="surface-kicker">Live workspace</span>
-              <h2>Accounts Payable Intake</h2>
-            </div>
-            <span className={`status-badge status-${activeJob.status.toLowerCase()}`}>
-              {statusLabel(activeJob.status)}
-            </span>
+            <p className="upload-limit">PDF, PNG, or JPEG · 10 MB · 5 pages · 5 uploads per account/day</p>
+            {fileError && <p className="field-error" role="alert">{fileError}</p>}
           </div>
 
-          <div className="dropzone">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff"
-              onChange={handleFileChange}
-            />
-            <div className="drop-icon">
-              <FileText size={24} />
-            </div>
-            <div>
-              <strong>{selectedFile ? selectedFile.name : activeJob.filename}</strong>
-              <span>{notice}</span>
-            </div>
-            <button className="compact-button" type="button" onClick={handleStart} disabled={processing}>
-              {processing ? "Running" : "Process"}
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          <div className="document-list-heading"><span>RECENT INVOICES</span><span>{jobs.length}</span></div>
+          {jobs.length ? <ul className="document-list">
+            {jobs.map((job) => <li key={job.job_id}>
+              <button className={`document-row ${job.job_id === activeId ? "selected" : ""}`} onClick={() => setActiveId(job.job_id)}>
+                <span className="document-icon"><FileText size={17} /></span>
+                <span className="document-meta"><strong title={job.filename}>{job.filename}</strong><small>{formatDate(job.created_at)}</small></span>
+                <span className={`status-pill status-${job.status.toLowerCase()}`}>{statusText(job.status)}</span>
+              </button>
+            </li>)}
+          </ul> : <div className="empty-inbox"><FileText size={22} /><strong>No invoices yet</strong><span>Upload an invoice to get started.</span></div>}
+          <div className="retention-note"><ShieldCheck size={16} /><span>Private storage. Documents are deleted after 30 days.</span></div>
+        </aside>
 
-          <dl className="snapshot-grid" aria-label="Invoice review snapshot">
-            <div>
-              <dt>Confidence</dt>
-              <dd>{activeJob.confidence.score}%</dd>
+        <section className="review-panel" aria-label="Invoice details">
+          {!activeJob ? <div className="review-empty"><FileText size={32} /><h2>Your review workspace</h2><p>Upload an invoice to see the original document, extracted details, and review status together.</p><button className="button button-quiet" onClick={() => fileInput.current?.click()}><UploadCloud size={16} /> Choose an invoice</button></div> : <>
+            <div className="review-header">
+              <div className="review-title"><p className="eyebrow">INVOICE DETAILS</p><h2 title={activeJob.filename}>{activeJob.filename}</h2><div className="file-facts"><span>{formatSize(activeJob.content_length || 0)}</span>{activeJob.page_count && <span>{activeJob.page_count} pages</span>}<span>{formatDate(activeJob.created_at)}</span></div></div>
+              <div className={`large-status status-${activeJob.status.toLowerCase()}`}><span className={activeJob.status === "PROCESSING" ? "status-spinner" : "status-dot"}>{activeJob.status === "PROCESSING" ? <LoaderCircle size={15} /> : null}</span>{statusText(activeJob.status)}</div>
             </div>
-            <div>
-              <dt>Needs review</dt>
-              <dd>{reviewCount}</dd>
-            </div>
-            <div>
-              <dt>Approved</dt>
-              <dd>{approvedCount}</dd>
-            </div>
-          </dl>
 
-          <div className="timeline">
-            {timeline.map((item) => (
-              <div className={`timeline-item ${item.status}`} key={item.label}>
-                <span className="timeline-dot" />
-                <strong>{item.label}</strong>
-                <small>{item.detail}</small>
-              </div>
-            ))}
-          </div>
-          <a className="surface-link" href="#review-output">
-            View extracted fields
-            <ArrowRight size={16} />
-          </a>
+            {activeJob.status === "PROCESSING" && <div className="processing-banner"><LoaderCircle className="spin" size={18} /><div><strong>Reading your invoice</strong><span>This can take a minute. You can leave this page; processing will continue.</span></div></div>}
+            {activeJob.status === "FAILED" && <div className="processing-banner error-banner"><AlertCircle size={18} /><div><strong>{activeJob.failure?.code === "DOCUMENT_INVALID" ? "This invoice could not be read" : "We couldn't finish processing"}</strong><span>{activeJob.failure?.code === "DOCUMENT_INVALID" ? "Check the file type and page limits, then upload the corrected document." : "Your invoice remains private and can be retried or deleted."}</span></div>{activeJob.failure?.code !== "DOCUMENT_INVALID" && <button className="button button-quiet" onClick={() => void retryProcessing()} disabled={Boolean(action)}><RefreshCw size={15} /> Retry</button>}</div>}
+
+            <div className="review-content">
+              <section className="document-view" aria-label="Original invoice">
+                <div className="subsection-header"><h3>Original invoice</h3>{documentPage && previewIsPdf && <span>Page {documentPage}</span>}</div>
+                <div className="document-canvas">
+                  {documentUrl ? (previewIsPdf ? <iframe title={`Original invoice, page ${documentPage || 1}`} src={`${documentUrl}${documentPage ? `#page=${documentPage}` : "#page=1"}`} /> : <img src={documentUrl} alt="Uploaded invoice" />) : <div className="document-placeholder">{documentError || (activeJob.status === "PROCESSING" ? "The original is being prepared..." : "The original document is unavailable.")}</div>}
+                </div>
+                {documentUrl && <a className="document-open" href={documentUrl} target="_blank" rel="noreferrer">Open original in a new tab <ArrowUpRight size={14} /></a>}
+              </section>
+
+              <section className="fields-panel" aria-label="Extracted invoice fields">
+                <div className="subsection-header"><div><h3>Extracted fields</h3><p>{reviewReady ? "Check the values before approving." : "Fields will appear when processing finishes."}</p></div></div>
+                {reviewReady ? <>
+                  <div className="field-list">
+                    {FIELD_ORDER.map((name) => {
+                      const extracted = activeJob.parsed_fields?.[name];
+                      const confidence = extracted?.confidence;
+                      return <label className="field-row" key={name}>
+                        <span className="field-label">{FIELD_LABELS[name]}{typeof confidence === "number" && <span className={`confidence ${confidence < 85 ? "confidence-low" : ""}`}>{Math.round(confidence)}%</span>}</span>
+                        <input value={fields[name] || ""} onChange={(event) => setFields((current) => ({ ...current, [name]: event.target.value }))} placeholder="Not found" aria-label={FIELD_LABELS[name]} disabled={Boolean(action) || finalStatus} />
+                        {extracted?.page && <button className="source-link" type="button" onClick={() => setDocumentPage(extracted.page || null)}>View page {extracted.page}<ChevronRight size={13} /></button>}
+                      </label>;
+                    })}
+                  </div>
+                  {!finalStatus && <div className="review-actions">
+                    <button className="button button-quiet" onClick={() => void saveReview()} disabled={Boolean(action) || !changedFields}>{action === "save" ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}Save changes</button>
+                    <button className="button button-reject" onClick={() => void decide("REJECT")} disabled={Boolean(action)}>{action === "reject" ? <LoaderCircle className="spin" size={15} /> : null}Reject</button>
+                    <button className="button button-primary" onClick={() => void decide("APPROVE")} disabled={Boolean(action)}>{action === "approve" ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}Approve invoice</button>
+                  </div>}
+                </> : <div className="fields-pending"><Clock3 size={21} /><span>We’ll show the extracted values here as soon as they are ready.</span></div>}
+              </section>
+            </div>
+
+            <section className="history-panel">
+              <div className="subsection-header"><div><h3>Activity</h3><p>Saved corrections and approval decisions</p></div><button className="button button-danger-quiet" onClick={() => void removeInvoice()} disabled={Boolean(action) || activeJob.status === "PROCESSING"}><Trash2 size={15} />Delete invoice</button></div>
+              {history.length ? <ol className="activity-list">{history.map((entry) => <li key={entry.audit_id}><span className="activity-mark"><Check size={12} /></span><div><strong>{entry.event_type === "FIELDS_CORRECTED" ? "Corrections saved" : entry.event_type === "APPROVED" ? "Invoice approved" : entry.event_type === "REJECTED" ? "Invoice rejected" : entry.event_type.replace(/_/g, " ").toLowerCase()}</strong><small>{formatDate(entry.created_at)}</small></div></li>)}</ol> : <p className="activity-empty">No review activity yet.</p>}
+            </section>
+          </>}
         </section>
       </section>
-
-      <section className="problem-section" id="problem">
-        <div className="section-copy">
-          <span className="eyebrow">The problem</span>
-          <h2>Invoice work gets slow when every PDF needs a person.</h2>
-          <p>
-            Accounts Payable teams do not just need OCR. They need a way to capture invoice data, see what looks risky, and approve clean records without losing track of the queue.
-          </p>
-        </div>
-        <div className="pain-grid">
-          {painQuestions.map((item) => (
-            <article className="pain-card" key={item.question}>
-              <strong>{item.question}</strong>
-              <p>{item.answer}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="editorial-section" id="review-output">
-        <div className="section-copy">
-          <span className="eyebrow">Sample output</span>
-          <h2>From invoice PDF to reviewed fields.</h2>
-          <p>
-            Run the sample and DocuFlow updates the field verification panel and recent invoice queue in the same workspace.
-          </p>
-          <ol className="workflow-list">
-            {workflowSteps.map((step) => (
-              <li key={step.title}>
-                <strong>{step.title}</strong>
-                <span>{step.text}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="workspace-grid">
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <span className="eyebrow">Accounts Payable review</span>
-                <h2>Invoice field verification</h2>
-              </div>
-              <button className="secondary-button small" type="button" onClick={approveJob}>
-                <CheckCircle2 size={17} />
-                Approve
-              </button>
-            </div>
-
-            <div className="field-list">
-              {fields.length > 0 ? (
-                fields.map(([field, details]) => (
-                  <label className="field-row" key={field}>
-                    <span>
-                      <strong>{field.replace(/_/g, " ")}</strong>
-                      <small>{details.source_key}</small>
-                    </span>
-                    <input
-                      value={correctedFields[field] || ""}
-                      onChange={(event) =>
-                        setCorrectedFields((current) => ({
-                          ...current,
-                          [field]: event.target.value,
-                        }))
-                      }
-                    />
-                    <em className={`confidence ${confidenceTone(details.confidence)}`}>
-                      {details.confidence.toFixed(1)}%
-                    </em>
-                  </label>
-                ))
-              ) : (
-                <div className="empty-state">
-                  <SearchCheck size={22} />
-                  <strong>Invoice details pending</strong>
-                  <span>The review fields will appear when extraction finishes.</span>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <span className="eyebrow">Invoice queue</span>
-                <h2>Recent invoices</h2>
-              </div>
-              <button className="icon-button dark" type="button" aria-label="Download report">
-                <Download size={17} />
-              </button>
-            </div>
-
-            <div className="job-list">
-              {jobs.map((job) => (
-                <button className="job-row" key={job.job_id} type="button" onClick={() => setActiveJob(job)}>
-                  <span className="job-file">
-                    <FileCheck2 size={18} />
-                    <span>
-                      <strong>{job.filename}</strong>
-                      <small>{job.owner_id}</small>
-                    </span>
-                  </span>
-                  <span className={`status-badge status-${job.status.toLowerCase()}`}>
-                    {statusLabel(job.status)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-      </section>
-
-      <section className="split-section" id="use-cases">
-        <div>
-          <span className="eyebrow">Why not just OCR?</span>
-          <h2>Because finance still has to trust the result.</h2>
-        </div>
-        <div className="proof-list">
-          {proofPoints.map((item) => (
-            <article key={item.title}>
-              <strong>{item.title}</strong>
-              <p>{item.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="split-section trust-section" id="trust">
-        <div>
-          <span className="eyebrow">Trust</span>
-          <h2>Review control, not black-box automation.</h2>
-        </div>
-        <div>
-          <p>
-            DocuFlow avoids pretending OCR is perfect. Uncertain fields stay visible until someone approves the invoice record.
-          </p>
-          <ul className="trust-list">
-            {trustPoints.map((item) => (
-              <li key={item}>
-                <Check size={16} />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section className="pricing-section" id="pricing">
-        <div>
-          <span className="eyebrow">Plans</span>
-          <h2>Start with the invoice volume you need.</h2>
-          <p>Pick the invoice volume that matches your team. Upgrade when review work becomes daily.</p>
-        </div>
-        <div className="pricing-options">
-          {pricingPlans.map((plan) => (
-            <article className={`price-option ${plan.featured ? "featured" : ""}`} key={plan.name}>
-              <div className="price-option-head">
-                <span>{plan.name}</span>
-                {plan.featured ? <em>Daily teams</em> : null}
-              </div>
-              <strong>{plan.price}</strong>
-              <p>{plan.summary}</p>
-              <ul>
-                {plan.features.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-              <a className={plan.featured ? "primary-button" : "secondary-button"} href="#workspace">
-                {plan.name === "Enterprise" ? "Talk to sales" : `Start ${plan.name}`}
-                <ArrowRight size={17} />
-              </a>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="closing-section" aria-label="Try DocuFlow">
-        <div>
-          <span className="eyebrow">Ready to test it?</span>
-          <h2>Try the invoice workflow.</h2>
-          <p>See the intake, extracted fields, review queue, and approval flow in one pass.</p>
-        </div>
-        <div className="closing-actions">
-          <button className="primary-button" type="button" onClick={handleStart} disabled={processing}>
-            {processing ? <RefreshCw className="spin" size={18} /> : <Play size={18} />}
-            Try sample invoice
-          </button>
-          <a className="secondary-button" href="#pricing">
-            View plans
-            <ArrowRight size={17} />
-          </a>
-        </div>
-      </section>
-
-      <footer className="site-footer">
-        <a className="footer-brand" href="#workspace" aria-label="DocuFlow OCR home">
-          <BrandMark />
-          <span className="brand-copy">
-            <strong>DocuFlow</strong>
-            <small>Invoice Control</small>
-          </span>
-        </a>
-        <nav className="footer-links" aria-label="Footer">
-          <a href="#product">Product</a>
-          <a href="#review-output">Workflow</a>
-          <a href="#problem">Problem</a>
-          <a href="#trust">Trust</a>
-          <a href="#pricing">Plans</a>
-        </nav>
-        <span className="footer-meta">©2026 SUPREME AI VENTURES LLC</span>
-      </footer>
+      <footer className="workspace-footer"><span>©2026 SUPREME AI VENTURES LLC</span><span>Invoices are retained for 30 days unless deleted sooner.</span><button onClick={exportInvoices} disabled={action === "export"}><ArrowDownToLine size={14} />Export approved invoices ({exportableCount})</button></footer>
     </main>
-  );
-}
-
-function BrandMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 48 48" focusable="false">
-        <path
-          className="brand-mark-paper"
-          d="M13 7.5h16.5L39 17v23.5H13z"
-        />
-        <path className="brand-mark-fold" d="M29.5 7.5V17H39" />
-        <path className="brand-mark-line primary" d="M18 19.5h13" />
-        <path className="brand-mark-line" d="M18 25.5h18" />
-        <path className="brand-mark-line" d="M18 31.5h9" />
-        <path className="brand-mark-check" d="M29.5 33.5l3 3 6-7" />
-        <path className="brand-mark-flow" d="M7.5 13.5h7.5M7.5 24h7.5M7.5 34.5h7.5" />
-      </svg>
-    </span>
   );
 }

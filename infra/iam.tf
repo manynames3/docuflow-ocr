@@ -34,6 +34,7 @@ data "aws_iam_policy_document" "lambda_exec" {
     actions = [
       "s3:GetObject",
       "s3:PutObject",
+      "s3:DeleteObject",
       "s3:ListBucket"
     ]
     resources = [
@@ -48,6 +49,7 @@ data "aws_iam_policy_document" "lambda_exec" {
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
       "dynamodb:Query",
       "dynamodb:Scan"
     ]
@@ -55,7 +57,8 @@ data "aws_iam_policy_document" "lambda_exec" {
       aws_dynamodb_table.jobs.arn,
       "${aws_dynamodb_table.jobs.arn}/index/*",
       aws_dynamodb_table.audit.arn,
-      "${aws_dynamodb_table.audit.arn}/index/*"
+      "${aws_dynamodb_table.audit.arn}/index/*",
+      aws_dynamodb_table.quotas.arn
     ]
   }
 

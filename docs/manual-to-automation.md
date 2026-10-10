@@ -16,8 +16,8 @@ Step Functions starts Textract, waits for completion, stores raw OCR JSON in S3,
 
 ## Human Review Fallback
 
-Low-confidence or incomplete jobs move to `NEEDS_REVIEW`. Review endpoints list the queue, fetch extracted fields, submit corrected values, and approve or reject the job. Each decision writes an audit record.
+Low-confidence or incomplete jobs move to `NEEDS_REVIEW`. The customer workspace displays the original beside extracted fields, accepts saved corrections, and supports approve or reject decisions. Each change is recorded in the customer's review history.
 
 ## Continuous Improvement Loop
 
-The `review_reasons`, corrected fields, and raw Textract output show which document types fail most often. Future work can add document-specific parsers, stronger validation rules, better sample coverage, and eventually a UI for faster review.
+The `review_reasons`, saved corrections, and raw Textract output help identify fields and layouts that need better validation. Future work can add document-specific parsers, stronger business rules, and accounting-system integrations.

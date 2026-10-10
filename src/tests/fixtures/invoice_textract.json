@@ -65,6 +65,8 @@
       "Id": "val-total",
       "EntityTypes": ["VALUE"],
       "Confidence": 95.0,
+      "Page": 1,
+      "Geometry": {"BoundingBox": {"Left": 0.7, "Top": 0.8, "Width": 0.2, "Height": 0.04}},
       "Relationships": [
         {"Type": "CHILD", "Ids": ["w-total-value"]}
       ]
